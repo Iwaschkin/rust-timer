@@ -4,6 +4,8 @@
 //! file and the dependency's features.
 
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
+use ratatui::crossterm::{ExecutableCommand, QueueableCommand};
 use ratatui::{DefaultTerminal, Frame};
 use std::error::Error;
 use std::fmt;
@@ -216,9 +218,23 @@ impl Session {
         &mut self,
         render: impl FnOnce(&mut Frame<'_>),
     ) -> Result<(), TerminalError> {
-        self.terminal
-            .draw(render)
-            .map(|_frame| ())
+        // Synchronized output: the terminal shows the whole frame at once, so an
+        // effect never tears. A terminal that lacks it ignores both markers. The end
+        // marker is written even when drawing fails, so updates are never held back.
+        let began = self
+            .terminal
+            .backend_mut()
+            .queue(BeginSynchronizedUpdate)
+            .map(|_backend| ());
+        let drawn = self.terminal.draw(render).map(|_frame| ());
+        let ended = self
+            .terminal
+            .backend_mut()
+            .execute(EndSynchronizedUpdate)
+            .map(|_backend| ());
+        began
+            .and(drawn)
+            .and(ended)
             .map_err(TerminalError::at(Step::Draw))
     }
 

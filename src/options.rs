@@ -2,6 +2,7 @@
 
 use crate::environment::Environment;
 use crate::glyphs::GlyphTier;
+use crate::motion::Motion;
 use crate::settings::Settings;
 use crate::theme::ColorDepth;
 
@@ -42,6 +43,8 @@ pub(crate) struct Options {
     pub(crate) color: Choice<ColorDepth>,
     /// The glyph choice.
     pub(crate) glyphs: Choice<GlyphTier>,
+    /// Whether effects run.
+    pub(crate) motion: Motion,
 }
 
 impl Default for Options {
@@ -50,6 +53,7 @@ impl Default for Options {
             settings: Settings::default(),
             color: Choice::Auto,
             glyphs: Choice::Auto,
+            motion: Motion::On,
         }
     }
 }

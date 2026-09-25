@@ -1,5 +1,6 @@
 use super::{Invocation, parse};
 use crate::glyphs::GlyphTier;
+use crate::motion::Motion;
 use crate::options::{Choice, Options};
 use crate::settings::Settings;
 use crate::theme::ColorDepth;
@@ -60,9 +61,12 @@ fn accepts_appearance_choices() {
     for (word, expected) in glyphs {
         assert_eq!(options(&["--glyphs", word]).glyphs, expected, "{word}");
     }
+    for (word, expected) in [("on", Motion::On), ("off", Motion::Off)] {
+        assert_eq!(options(&["--motion", word]).motion, expected, "{word}");
+    }
     let defaults = options(&[]);
     assert_eq!(
-        (defaults.color, defaults.glyphs),
-        (Choice::Auto, Choice::Auto)
+        (defaults.color, defaults.glyphs, defaults.motion),
+        (Choice::Auto, Choice::Auto, Motion::On)
     );
 }

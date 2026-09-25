@@ -43,6 +43,10 @@ shows the current phase as a progress bar with the time left.
 - **The time left** is shown in large block digits as minutes and seconds, rounded
   up, so it reads `00:00` only when the phase is over. A dial of braille dots and a
   bar that fills in eighths of a cell show how much of the phase has passed.
+- **Motion:** the screen assembles itself when the program opens, a phase that
+  starts coalesces into view, and the popup drops in and its amber frame pulses
+  slowly, about once every two seconds, until you press a key. `--motion off`
+  turns every animation off.
 - **Timing** comes from the system's monotonic clock, not from counting screen
   updates. The screen redraws at least four times a second, and a slow redraw
   never changes the length of a phase.
@@ -97,6 +101,7 @@ pomodoro --help               # the options, their ranges and defaults, and the 
 | `--every N` | how many work phases come before a long break | 1 to 99 | 4 |
 | `--color WHEN` | the colours to use | `auto`, `truecolor`, `256`, `16`, `none` | `auto` |
 | `--glyphs SET` | the pictures beside the text | `auto`, `emoji`, `symbols`, `ascii` | `auto` |
+| `--motion ON` | whether the screen animates | `on`, `off` | `on` |
 | `-h`, `--help` | print the usage and exit | | |
 
 Each option's value is the next argument (`--work 50`, not `--work=50`), and each
@@ -186,6 +191,7 @@ the message is printed.
 - **Odd characters in place of the `·`, the bar or the emoji**: use a terminal with
   UTF-8 and a font that has box-drawing characters, such as Windows Terminal. If
   emoji look misaligned, `--glyphs symbols` swaps them for one-cell symbols.
+- **Animations are distracting or slow**: `--motion off` draws every screen still.
 - **Colours look wrong**: `--color 256` or `--color 16` forces a smaller palette,
   and `--color none` uses the terminal's own colours.
 

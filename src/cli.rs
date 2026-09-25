@@ -3,6 +3,7 @@
 //! This is the only module that names the flags and their choices.
 
 use crate::glyphs::GlyphTier;
+use crate::motion::Motion;
 use crate::options::{Choice, Options};
 use crate::settings::{InvalidNumber, RANGE, Settings};
 use crate::theme::ColorDepth;
@@ -34,16 +35,19 @@ pub(crate) enum Flag {
     Color,
     /// `--glyphs`.
     Glyphs,
+    /// `--motion`.
+    Motion,
 }
 
 impl Flag {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::Work,
         Self::Short,
         Self::Long,
         Self::Every,
         Self::Color,
         Self::Glyphs,
+        Self::Motion,
     ];
 
     fn name(self) -> &'static str {
@@ -54,6 +58,7 @@ impl Flag {
             Self::Every => "--every",
             Self::Color => "--color",
             Self::Glyphs => "--glyphs",
+            Self::Motion => "--motion",
         }
     }
 
@@ -84,6 +89,9 @@ const GLYPHS: [(&str, Choice<GlyphTier>); 4] = [
     ("symbols", Choice::Fixed(GlyphTier::Symbols)),
     ("ascii", Choice::Fixed(GlyphTier::Ascii)),
 ];
+
+/// The words `--motion` accepts.
+const MOTIONS: [(&str, Motion); 2] = [("on", Motion::On), ("off", Motion::Off)];
 
 /// The words of a choice flag, joined for the usage text and error messages.
 fn words<T>(choices: &[(&str, T)]) -> String {
@@ -216,6 +224,7 @@ pub(crate) fn parse(
             Flag::Every => settings.every = value.parse().map_err(invalid)?,
             Flag::Color => options.color = choose(flag, value, &COLORS)?,
             Flag::Glyphs => options.glyphs = choose(flag, value, &GLYPHS)?,
+            Flag::Motion => options.motion = choose(flag, value, &MOTIONS)?,
         }
     }
     Ok(Invocation::Run(options))
@@ -225,10 +234,10 @@ pub(crate) fn parse(
 pub(crate) fn usage(key_help: &str) -> String {
     let defaults = Settings::default();
     let (low, high) = (RANGE.start(), RANGE.end());
-    let (colors, glyphs) = (words(&COLORS), words(&GLYPHS));
+    let (colors, glyphs, motions) = (words(&COLORS), words(&GLYPHS), words(&MOTIONS));
     format!(
         "usage: pomodoro [--work MIN] [--short MIN] [--long MIN] [--every N]\n\
-         \x20               [--color WHEN] [--glyphs SET]\n\
+         \x20               [--color WHEN] [--glyphs SET] [--motion ON]\n\
          \n\
          \x20 --work MIN     work phase length in minutes, {low} to {high} (default {work})\n\
          \x20 --short MIN    short break length in minutes, {low} to {high} (default {short})\n\
@@ -236,6 +245,7 @@ pub(crate) fn usage(key_help: &str) -> String {
          \x20 --every N      work phases before a long break, {low} to {high} (default {every})\n\
          \x20 --color WHEN   colours: {colors} (default auto)\n\
          \x20 --glyphs SET   pictures: {glyphs} (default auto)\n\
+         \x20 --motion ON    animation: {motions} (default on)\n\
          \x20 -h, --help     print this help\n\
          \n\
          keys: {key_help}\n",

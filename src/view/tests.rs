@@ -1,5 +1,6 @@
 use super::{border_type, phase_glyph, phase_label, remaining_label, render};
 use crate::glyphs::GlyphTier;
+use crate::motion::{Choreography, Cue, Motion};
 use crate::options::Appearance;
 use crate::settings::Settings;
 use crate::terminal::KEYS;
@@ -315,7 +316,42 @@ fn preview_screens() -> Result<(), Box<dyn Error>> {
             }
         }
     }
+    let films = [
+        (
+            "intro",
+            Timer::start(Settings::default(), base),
+            Cue::Start,
+            150,
+        ),
+        ("alert", skipped(1, base), Cue::Ready, 300),
+    ];
+    for (name, timer, cue, step) in films {
+        let mut choreography = Choreography::new(Motion::On);
+        choreography.cue(cue);
+        for frame_number in 1..=6_u32 {
+            let buffer = draw_moving(&timer, base, &mut choreography, step)?;
+            let file = directory.join(format!("{name}-frame{frame_number}.html"));
+            std::fs::write(file, html(&buffer))?;
+        }
+    }
     Ok(())
+}
+
+/// One 100 × 30 frame with the effects advanced by `step` milliseconds, drawn in
+/// the loop's order: widgets, effects, colour tier.
+fn draw_moving(
+    timer: &Timer,
+    now: Instant,
+    choreography: &mut Choreography,
+    step: u64,
+) -> Result<Buffer, Box<dyn Error>> {
+    let mut terminal = Terminal::new(TestBackend::new(100, 30))?;
+    terminal.draw(|frame| {
+        render(frame, timer, now, TRUECOLOR_EMOJI, &KEYS);
+        choreography.render(Duration::from_millis(step), frame.buffer_mut());
+        theme::quantize(frame.buffer_mut(), ColorDepth::TrueColor);
+    })?;
+    Ok(terminal.backend().buffer().clone())
 }
 
 /// The buffer as an HTML page of fixed-width cells, in the font the owner's

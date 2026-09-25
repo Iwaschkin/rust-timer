@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+tachyonfx = { version = "0.25.2", default-features = false, features = ["std", "std-duration"] }
 tui-big-text = "0.8.10"
 
 # The baseline's native lints; the project's guard checks them.

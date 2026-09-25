@@ -4,6 +4,7 @@ mod app;
 mod cli;
 mod environment;
 mod glyphs;
+mod motion;
 mod options;
 mod settings;
 mod terminal;
@@ -55,7 +56,8 @@ fn main() -> ExitCode {
         cfg!(windows),
         terminal::console_truecolor(),
     );
-    match app::run(options.settings, options.appearance(&environment)) {
+    let appearance = options.appearance(&environment);
+    match app::run(options.settings, appearance, options.motion) {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => {
             for error in failure.errors() {

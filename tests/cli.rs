@@ -151,6 +151,7 @@ fn help_prints_usage() -> io::Result<()> {
             "default 4",
             "--color",
             "--glyphs",
+            "--motion",
             "truecolor",
             "emoji",
             "default auto",
@@ -185,6 +186,10 @@ fn rejects_unknown_choice() -> io::Result<()> {
     usage_error(
         &["--glyphs", "fancy"],
         &["--glyphs", "\"fancy\"", "auto, emoji, symbols or ascii"],
+    )?;
+    usage_error(
+        &["--motion", "maybe"],
+        &["--motion", "\"maybe\"", "on or off"],
     )?;
     Ok(())
 }
