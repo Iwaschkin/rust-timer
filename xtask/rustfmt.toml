@@ -1,0 +1,3 @@
+# Let Cargo provide each target's parser edition, including mixed-edition workspaces.
+# This is a formatting style choice, not a project-wide language-edition override.
+style_edition = "2024"
