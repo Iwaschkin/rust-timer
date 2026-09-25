@@ -7,18 +7,22 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers
 use ratatui::{DefaultTerminal, Frame};
 use std::error::Error;
 use std::fmt;
-use std::io::{self, IsTerminal};
+use std::io::{self, IsTerminal, Write};
 use std::time::Duration;
 
 /// What a key press asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Command {
+    /// Start, pause or resume the phase.
+    StartPause,
+    /// Move to the next phase.
+    Skip,
     /// Leave the program.
     Quit,
 }
 
 /// The keys, as the screen lists them.
-pub(crate) const KEY_HELP: &str = "q quit";
+pub(crate) const KEY_HELP: &str = "space start/pause · s skip · q quit";
 
 /// The command a terminal event asks for, if any. Only key presses count: Windows
 /// also reports releases, which would otherwise act twice.
@@ -35,10 +39,15 @@ pub(crate) fn command(event: &Event) -> Option<Command> {
     if key.modifiers == KeyModifiers::CONTROL {
         return (character == 'c').then_some(Command::Quit);
     }
-    if key.modifiers.difference(KeyModifiers::SHIFT).is_empty() {
-        return matches!(character, 'q' | 'Q').then_some(Command::Quit);
+    if !key.modifiers.difference(KeyModifiers::SHIFT).is_empty() {
+        return None;
     }
-    None
+    match character {
+        ' ' => Some(Command::StartPause),
+        's' | 'S' => Some(Command::Skip),
+        'q' | 'Q' => Some(Command::Quit),
+        _ => None,
+    }
 }
 
 /// The step of terminal handling that failed.
@@ -50,6 +59,8 @@ pub(crate) enum Step {
     Draw,
     /// Waiting for or reading an event.
     ReadInput,
+    /// Ringing the terminal bell.
+    Bell,
     /// Leaving raw mode and the alternate screen.
     Restore,
 }
@@ -60,6 +71,7 @@ impl fmt::Display for Step {
             Self::Enter => "enter the terminal",
             Self::Draw => "draw the screen",
             Self::ReadInput => "read input",
+            Self::Bell => "ring the bell",
             Self::Restore => "restore the terminal",
         })
     }
@@ -210,6 +222,19 @@ impl Session {
         }
         let event = event::read().map_err(TerminalError::at(Step::ReadInput))?;
         Ok(command(&event))
+    }
+
+    /// Rings the terminal bell once.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the bell cannot be written to the terminal.
+    pub(crate) fn ring_bell(&mut self) -> Result<(), TerminalError> {
+        let backend = self.terminal.backend_mut();
+        backend
+            .write_all(b"\x07")
+            .and_then(|()| backend.flush())
+            .map_err(TerminalError::at(Step::Bell))
     }
 
     /// Restores the terminal, reporting `run`'s outcome together with the restore's.

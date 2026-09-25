@@ -1,4 +1,5 @@
-//! The run loop: read the clock, draw, and act on keys until the user quits.
+//! The run loop: read the clock, end phases, draw, and act on keys until the user
+//! quits.
 
 use crate::settings::Settings;
 use crate::terminal::{self, Command, RunFailure, Session, TerminalError};
@@ -22,13 +23,24 @@ pub(crate) fn run(settings: Settings) -> Result<(), RunFailure> {
 }
 
 fn run_loop(session: &mut Session, settings: Settings) -> Result<(), TerminalError> {
-    let timer = Timer::start(settings, Instant::now());
+    let mut timer = Timer::start(settings, Instant::now());
     loop {
         let now = Instant::now();
+        if timer.tick(now) {
+            session.ring_bell()?;
+        }
         session.draw(|frame| view::render(frame, &timer, now, terminal::KEY_HELP))?;
-        match session.next_command(REDRAW)? {
-            Some(Command::Quit) => return Ok(()),
-            None => {}
+        let Some(command) = session.next_command(REDRAW)? else {
+            continue;
+        };
+        let now = Instant::now();
+        let ended = match command {
+            Command::StartPause => timer.toggle(now),
+            Command::Skip => timer.skip(now),
+            Command::Quit => return Ok(()),
+        };
+        if ended {
+            session.ring_bell()?;
         }
     }
 }

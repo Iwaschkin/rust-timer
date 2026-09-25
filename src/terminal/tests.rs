@@ -1,5 +1,7 @@
 use super::{Command, RunFailure, Step, TerminalError, combine, command};
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use std::io;
 
 fn press(code: KeyCode, modifiers: KeyModifiers) -> Event {
@@ -12,24 +14,71 @@ fn with_kind(code: KeyCode, kind: KeyEventKind) -> Event {
 
 #[test]
 fn keys_map_to_commands() {
-    let quits = [
-        press(KeyCode::Char('q'), KeyModifiers::NONE),
-        press(KeyCode::Char('Q'), KeyModifiers::SHIFT),
-        press(KeyCode::Esc, KeyModifiers::NONE),
-        press(KeyCode::Char('c'), KeyModifiers::CONTROL),
+    let cases = [
+        (
+            press(KeyCode::Char(' '), KeyModifiers::NONE),
+            Command::StartPause,
+        ),
+        (press(KeyCode::Char('s'), KeyModifiers::NONE), Command::Skip),
+        (
+            press(KeyCode::Char('S'), KeyModifiers::SHIFT),
+            Command::Skip,
+        ),
+        (press(KeyCode::Char('q'), KeyModifiers::NONE), Command::Quit),
+        (
+            press(KeyCode::Char('Q'), KeyModifiers::SHIFT),
+            Command::Quit,
+        ),
+        (press(KeyCode::Esc, KeyModifiers::NONE), Command::Quit),
+        (
+            press(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            Command::Quit,
+        ),
     ];
-    for event in quits {
-        assert_eq!(command(&event), Some(Command::Quit), "{event:?}");
+    for (event, expected) in cases {
+        assert_eq!(command(&event), Some(expected), "{event:?}");
     }
 }
 
 #[test]
 fn ignores_key_release_and_repeat() {
     for kind in [KeyEventKind::Release, KeyEventKind::Repeat] {
-        for code in [KeyCode::Char('q'), KeyCode::Esc] {
+        for code in [
+            KeyCode::Char(' '),
+            KeyCode::Char('s'),
+            KeyCode::Char('S'),
+            KeyCode::Char('q'),
+            KeyCode::Char('Q'),
+            KeyCode::Esc,
+        ] {
             let event = with_kind(code, kind);
             assert_eq!(command(&event), None, "{event:?}");
         }
+    }
+}
+
+#[test]
+fn unbound_input_is_ignored() {
+    let mouse = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 3,
+        row: 2,
+        modifiers: KeyModifiers::NONE,
+    };
+    let events = [
+        press(KeyCode::Char('c'), KeyModifiers::NONE),
+        press(KeyCode::Char('s'), KeyModifiers::CONTROL),
+        press(KeyCode::Char('q'), KeyModifiers::ALT),
+        press(KeyCode::Char('x'), KeyModifiers::NONE),
+        press(KeyCode::Enter, KeyModifiers::NONE),
+        Event::Mouse(mouse),
+        Event::FocusGained,
+        Event::FocusLost,
+        Event::Paste(String::from("q")),
+        Event::Resize(80, 24),
+    ];
+    for event in events {
+        assert_eq!(command(&event), None, "{event:?}");
     }
 }
 
