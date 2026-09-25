@@ -76,7 +76,8 @@ there is no hosted CI.
   that commit.
 - **Expected:** one sentence giving the path and the order: slice commit, then the
   review in a following commit.
-- **Done:** `docs/reviews/s1.md`, committed after the slice commit it names.
+- **Done:** a review file per slice, committed after the slice commit it names;
+  first under `docs/reviews/`, then under `evidence/` (SI-08).
 
 ### SI-06 A plan check that names files fails until the files exist (note)
 
