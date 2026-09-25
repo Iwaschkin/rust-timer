@@ -46,7 +46,10 @@ there is no hosted CI.
   own production code reads, and that a red is observed with `cargo test` when the
   lint gate would stop it first.
 - **Done:** slice 1 has the work length only; C01's other three values move to
-  slice 2. Both reds were observed with `cargo test --locked`.
+  slice 2. Both reds were observed with `cargo test --locked`. In slice 2 the same
+  rule held back T07's N = 1 case: building settings with N = 1 needs the `--every`
+  constructor, which only slice 3's production code reads, and a test-only
+  constructor would be inactive `cfg` code. That case moves to slice 3.
 
 ### SI-04 Nothing bounds a spawned binary; an interactive one hangs the test (misleads)
 
@@ -96,3 +99,18 @@ there is no hosted CI.
   and the kickoff to say what replaces the CI URL when it does not.
 - **Done:** the reviews record "no remote, so no CI job"; local checks stand in and
   are labelled local.
+
+### SI-08 `gates` counts evidence in a directory no document names (misleads)
+
+- **Where:** `cargo xtask gates`, at the slice 2 stop.
+- **What happened:** gates reported "evidence: 0 bytes in 0 files" with the slice 1
+  review committed under `docs/reviews/`. xtask/src/gates.rs counts only files whose
+  path starts with a top-level `evidence/` directory. verification.md says gates
+  reports "evidence size and file count" but not where evidence lives, and neither
+  the review template nor the kickoff names the directory. Together with SI-05, the
+  only statement of where a review goes is a string in the tool's source.
+- **Expected:** verification.md, the review template or `init` (by creating
+  `evidence/`) to name the directory that gates measures.
+- **Done:** moved the reviews to `evidence/` and updated AGENTS.md. Gates then
+  reported "evidence: 1754 bytes in 1 files". The move went into the slice 2 code
+  commit `a6a4092` by accident, because `git mv` had staged it.

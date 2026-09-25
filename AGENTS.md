@@ -25,7 +25,7 @@ check on Linux and Windows. The plan pack in `docs/plan/` fixes behaviour; the
 behaviour contract names the test for every rule, and the plan's ownership checks
 O1 to O7 each print nothing while their rule holds. Terminal restore, the bell and
 resizing (contract rows M01, M03, M04) need a person at a real terminal on Windows
-and on Linux; record each result in the slice review under `docs/reviews/`. Tests
+and on Linux; record each result in the slice review under `evidence/`. Tests
 that run the binary bound it and kill it at the limit, because an interactive
 binary hangs instead of failing.
 
