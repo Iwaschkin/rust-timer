@@ -87,8 +87,9 @@ pomodoro --help               # the options, their ranges and defaults, and the 
 | `--motion ON` | whether the screen animates | `on`, `off` | `on` |
 | `-h`, `--help` | print the usage and exit | | |
 
-Each option's value is the next argument (`--work 50`, not `--work=50`), and each
-option can appear once. `--help` wins wherever it appears.
+A value can follow its option as the next argument or after `=` (`--work 50` or
+`--work=50`), and each option can appear once. The options are read in order, so
+`--help` prints the usage unless an earlier argument is already wrong.
 
 With `auto`, pomodoro picks the colours and pictures from the terminal it runs in.
 It uses 24-bit colour in Windows Terminal, VS Code and any terminal that sets
@@ -131,19 +132,21 @@ Quitting ends the run. Nothing is saved, and the next run starts again at round 
 | 1 | The terminal could not be used, or the usage could not be printed; the message on stderr says why |
 | 2 | An option was wrong; nothing was started |
 
-Every message starts with `pomodoro:` and fits on one line. For an option error,
-the message names the first wrong argument in the order given, for example:
+An option error is reported by clap, the argument parser: an `error:` line naming
+the problem, sometimes a tip or the usage line, then a pointer to `--help`. When
+several arguments are wrong, only one is reported. For example:
 
 ```text
-pomodoro: invalid value for --work: "0" is not a whole number from 1 to 99
-pomodoro: --work needs a value
-pomodoro: unrecognised argument "--work=50"
-pomodoro: --work given more than once
+error: invalid value '0' for '--work <MIN>': "0" is not a whole number from 1 to 99
+error: a value is required for '--work <MIN>' but none was supplied
+error: unexpected argument '--wrok' found
+error: the argument '--work <MIN>' cannot be used multiple times
 ```
 
-A terminal failure names the step that failed, then the system's reason, for
-example `pomodoro: could not draw the screen: ...`. The terminal is restored before
-the message is printed.
+Every other message starts with `pomodoro:` and fits on one line. A terminal
+failure names the step that failed, then the system's reason, for example
+`pomodoro: could not draw the screen: ...`. The terminal is restored before the
+message is printed.
 
 ## Troubleshooting
 

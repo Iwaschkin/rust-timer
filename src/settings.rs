@@ -51,11 +51,6 @@ impl Minutes {
     pub(crate) fn duration(self) -> Duration {
         Duration::from_secs(u64::from(self.0) * 60)
     }
-
-    /// The length in minutes.
-    pub(crate) fn get(self) -> u8 {
-        self.0
-    }
 }
 
 impl FromStr for Minutes {
@@ -63,6 +58,13 @@ impl FromStr for Minutes {
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         in_range(text).map(Self)
+    }
+}
+
+/// The number, as the usage text shows a default.
+impl fmt::Display for Minutes {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
     }
 }
 
@@ -83,6 +85,13 @@ impl FromStr for Every {
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         in_range(text).map(Self)
+    }
+}
+
+/// The number, as the usage text shows a default.
+impl fmt::Display for Every {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
     }
 }
 
