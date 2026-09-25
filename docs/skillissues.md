@@ -9,8 +9,8 @@ led me to expect, the evidence, and what I did about it. Severity is one of: blo
 (the documented route fails), misleads (the text leads to a wrong action), friction
 (extra work, right result), or note.
 
-Host: Windows 11, Git Bash, Rust 1.98.1, cargo-deny 0.20.2, git 2.55. No remote, so
-there is no hosted CI.
+Host: Windows 11, Git Bash, Rust 1.98.1, cargo-deny 0.20.2, git 2.55. A GitHub remote
+arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
 
 ## Entries
 
@@ -118,3 +118,70 @@ there is no hosted CI.
 - **Done:** moved the reviews to `evidence/` and updated AGENTS.md. Gates then
   reported "evidence: 1754 bytes in 1 files". The move went into the slice 2 code
   commit `a6a4092` by accident, because `git mv` had staged it.
+
+### SI-09 "Apply the baseline at the start of the slice" has no defined meaning mid-project (note)
+
+- **Where:** kickoff-template.md step 1, at the start of slice 3.
+- **What happened:** the project was bootstrapped with `init` in slice 1, so later
+  slices had nothing to bootstrap. maintenance.md covers a refresh and says equal
+  version markers are not evidence that nothing changed; the diff against the
+  installed assets is. The kickoff does not say that "apply" means that diff. I first
+  compared markers and ran the guard, and only did the diff after reading
+  maintenance.md.
+- **Expected:** the kickoff step to say "diff the deployed assets against the
+  installed skill, as maintenance.md describes; refresh if they differ".
+- **Done:** diffed 19 tooling files, four configuration files, the CI workflow and
+  the lint tables against rust-skills `7ae17f6`; all matched.
+
+### SI-10 Nothing checks that the tests the contract names exist (friction)
+
+- **Where:** plan-format.md's evidence column and `cargo xtask gates`, at the end of
+  slice 3.
+- **What happened:** the contract names a test for each row, and `gates` reports a
+  test name used more than once. Nothing reports a named test that does not exist,
+  so renaming a test orphans its row silently. I checked by hand: every backticked
+  name in the contract's rows against every `fn` in `src/` and `tests/`, and all 31
+  exist.
+- **Expected:** gates, or a check the plan generates, to list contract names with no
+  matching test.
+- **Done:** the hand check, recorded in the slice 3 review.
+
+### SI-11 Hosted CI stopped on account billing; the template does not mention cost (note)
+
+- **Where:** the CI template, on PR #2.
+- **What happened:** every job of run 36091436371 failed in 2 to 5 s with "The job
+  was not started because recent account payments have failed or your spending
+  limit needs to be increased." The repository is private. On private repositories
+  GitHub bills Windows minutes at twice the Linux rate, and the template also runs
+  the whole workflow weekly. Whether this workflow used up the allowance is not
+  established here; the template does not mention the cost at all.
+- **Expected:** a line in asset-application.md or the template about minutes on
+  private repositories and the weekly run, so an owner can budget for it.
+- **Done:** the owner made the repository public, where standard runners are free.
+  The run queued for `f05eaf3` then started and passed on every job (run
+  36092083660, 108 s). Slice 3's review records both runs.
+
+### SI-12 A manual check that tests the terminal, not the program (misleads)
+
+- **Where:** rust-project-plan's acceptance rows, met at M03 after slice 3.
+- **What happened:** M03 said "a phase ends: the terminal bell rings once", checked
+  by hand. The owner heard nothing in VS Code's terminal or in Windows Terminal. The
+  row mixed two claims: that pomodoro sends a bell, which is the program's
+  behaviour, and that the terminal makes a sound, which is the terminal's
+  configuration. VS Code's `accessibility.signals.terminalBell` defaults to sound
+  `"auto"`, which plays only when a screen reader is attached. So a correct program
+  fails the row by default, and the manual check alone could not tell the two
+  apart. Neither skill offers a way to capture what a terminal program actually
+  writes. The same holds for M01 and M04.
+- **Expected:** plan-format.md to split such a row into what the program emits,
+  tested through a pseudo-terminal, and what the terminal does with it, a manual
+  check that records the terminal's settings. The baseline could name a
+  pseudo-terminal capture as the route to test terminal output.
+- **Done:** a throwaway harness ran pomodoro in a ConPTY, the pseudo-console both
+  terminals use, for 65 s with `--work 1`. It captured "Work · Running" becoming
+  "Short break · Ready" and exactly one standalone bell at that point; a PowerShell
+  control that writes a bell gave one standalone bell the same way. The README now
+  names the settings that make the bell audible. The owner then heard it in Windows
+  Terminal, quiet and about a second late, and never in VS Code. A timed capture put
+  the bell 0.16 s after the phase end and 15 ms before the Ready screen, so the delay
+  is in the terminal's sound playback, not in pomodoro. Linux is not yet checked.

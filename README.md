@@ -1,0 +1,157 @@
+# pomodoro
+
+A pomodoro timer for the terminal. It runs a cycle of work phases and breaks, and
+shows the current phase as a progress bar with the time left.
+
+```text
+Work · Running
+Round 2 of 4
+┌──────────────────────────────────────────────────────┐
+│████████████████        17:42                         │
+└──────────────────────────────────────────────────────┘
+space start/pause · s skip · q quit
+```
+
+## How it works
+
+- **The cycle:** a work phase is followed by a short break. After the fourth work
+  phase comes a long break instead, and the cycle starts again at round 1.
+  With the defaults that's 25 minutes of work, 5-minute short breaks and a 15-minute
+  long break.
+- **The first phase** starts running as soon as the program opens.
+- **When a phase ends,** the terminal bell rings once. The next phase is loaded at
+  full length and waits, marked Ready, until you press space. Nothing moves on
+  while you are away.
+- **The bar** fills as the phase runs. The label on it is the time left as
+  minutes and seconds, rounded up, so it reads `00:00` only when the phase is over.
+- **Timing** comes from the system's monotonic clock, not from counting screen
+  updates. The screen redraws at least four times a second, and a slow redraw
+  never changes the length of a phase.
+
+## Requirements
+
+- Windows or Linux. macOS is not tested.
+- An interactive terminal: Windows Terminal on Windows, or any terminal emulator
+  on Linux. At 40 columns by 6 rows or more, the whole screen fits; a smaller
+  window still works, with parts cut off.
+- To build it: [rustup](https://rustup.rs). The repository pins Rust 1.98.1 in
+  `rust-toolchain.toml`, and rustup installs that version the first time you run
+  `cargo` here.
+
+## Install
+
+From the repository root, either install the binary into Cargo's bin directory
+(usually `~/.cargo/bin`, which rustup puts on your `PATH`):
+
+```sh
+cargo install --path . --locked
+```
+
+or build it in place and run `target/release/pomodoro` (`pomodoro.exe` on
+Windows):
+
+```sh
+cargo build --release --locked
+```
+
+To try it without installing, use `cargo run --release --`, followed by any
+options.
+
+## Running it
+
+```sh
+pomodoro                      # 25 / 5 / 15 minutes, long break every 4th round
+pomodoro --work 50 --short 10 # longer work phases and short breaks
+pomodoro --every 2            # a long break after every second work phase
+pomodoro --work 1 --short 1   # a quick run to see the cycle and hear the bell
+pomodoro --help               # the options, their ranges and defaults, and the keys
+```
+
+### Options
+
+| Option | Sets | Values | Default |
+| --- | --- | --- | --- |
+| `--work MIN` | the length of a work phase, in minutes | 1 to 99 | 25 |
+| `--short MIN` | the length of a short break, in minutes | 1 to 99 | 5 |
+| `--long MIN` | the length of a long break, in minutes | 1 to 99 | 15 |
+| `--every N` | how many work phases come before a long break | 1 to 99 | 4 |
+| `-h`, `--help` | print the usage and exit | | |
+
+Each option takes a whole number, given as the next argument (`--work 50`, not
+`--work=50`), and can appear once. `--help` wins wherever it appears.
+
+### Keys
+
+| Key | Does |
+| --- | --- |
+| Space | Starts a phase that is Ready, pauses one that is Running, resumes one that is Paused |
+| `s` | Skips to the next phase, loaded as Ready; no bell. A skipped work phase still counts towards the long break |
+| `q`, Esc or Ctrl-C | Quits and restores the terminal |
+
+Keys work with or without Shift. Any other key does nothing.
+
+### The screen
+
+From the top: the phase and its state (`Work`, `Short break` or `Long break`;
+`Running`, `Paused` or `Ready`), the round (a break shows the round it follows),
+the progress bar with the time left, and the keys.
+
+Quitting ends the run. Nothing is saved, and the next run starts again at round 1.
+
+## Exit status and messages
+
+| Status | Meaning |
+| --- | --- |
+| 0 | You quit, or `--help` printed the usage |
+| 1 | The terminal could not be used, or the usage could not be printed; the message on stderr says why |
+| 2 | An option was wrong; nothing was started |
+
+Every message starts with `pomodoro:` and fits on one line. For an option error,
+the message names the first wrong argument in the order given, for example:
+
+```text
+pomodoro: invalid value for --work: "0" is not a whole number from 1 to 99
+pomodoro: --work needs a value
+pomodoro: unrecognised argument "--work=50"
+pomodoro: --work given more than once
+```
+
+A terminal failure names the step that failed, then the system's reason, for
+example `pomodoro: could not draw the screen: ...`. The terminal is restored before
+the message is printed.
+
+## Troubleshooting
+
+- **`an interactive terminal is required; standard output is not one`**: the
+  output is redirected to a file or a pipe. Run `pomodoro` directly in a terminal
+  window. `--help` works either way.
+- **No bell**: pomodoro sends the terminal's bell once when a phase ends; whether
+  you hear it is up to the terminal. The phase change still shows on screen as
+  `Ready`.
+  - VS Code's terminal is silent by default: its `accessibility.signals.terminalBell`
+    setting plays a sound only when a screen reader is attached. Set it to
+    `{ "sound": "on" }`, or turn on `terminal.integrated.enableVisualBell` for a
+    bell icon instead.
+  - Windows Terminal plays a sound by default (the profile's `bellStyle` is
+    `"audible"`). If it's silent, check that the profile doesn't change `bellStyle`
+    and that System sounds isn't muted in the Windows volume mixer. If it's too
+    quiet, point the profile's `bellSound` at a louder audio file. `"all"` also
+    flashes the taskbar.
+  - To test a terminal on its own, run `[Console]::Write([char]7)` in PowerShell,
+    or `printf '\a'` on Linux.
+- **The terminal stops echoing after pomodoro was killed**: quitting with `q`,
+  Esc or Ctrl-C always restores the terminal, but a process killed from outside
+  (for example with `kill` on Linux) cannot. Type `reset` and press Enter, even if
+  the letters don't appear.
+- **The time looks wrong after the computer slept**: whether the clock counts time
+  asleep depends on the platform. After waking, the phase may have ended or may
+  carry on where it stopped.
+- **Odd characters in place of the `·` or the bar**: use a terminal with UTF-8 and
+  a font that has box-drawing characters, such as Windows Terminal.
+
+## Development
+
+[AGENTS.md](AGENTS.md) has the checks to run before a change is done. It is built
+on the `rust-quality-baseline` skill, with `cargo xtask check` as the main one.
+The intended behaviour, and the test that covers each rule, are in
+[docs/plan/](docs/plan/).
