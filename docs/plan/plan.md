@@ -29,8 +29,8 @@ every child it spawns.
 | `view` | the three layouts and their composition, labels | `timer`, `theme`, `glyphs`, ratatui widgets |
 | `view/clock`, `view/bar`, `view/dial`, `view/ribbon`, `view/popup` | the big digits, the gradient bar, the braille dial, the cycle ribbon, the Ready popup | `theme`, ratatui; `view/clock` also tui-big-text |
 | `motion` | which effect runs on which event, the effect manager, the wake-up interval | tachyonfx, `theme`, ratatui buffer |
-| `terminal` | entering and restoring the terminal, keys, the bell, the window title, OSC 9;4 progress, synchronized output | ratatui's crossterm |
-| `app` | the loop: read the clock, tick, run effects, draw, update title and progress, act on keys | all of the above |
+| `terminal` | entering and restoring the terminal, keys, the bell, the window title, OSC 9;4 progress, synchronized output; `Host`, what the loop needs from outside, with `Session` as the live host and clock | ratatui's crossterm |
+| `app` | the loop, against a `Host`: read the time, tick, run effects, draw, update title and progress, act on keys | all of the above |
 | `main` | reading `args_os` and the environment, exit codes, error chains | `cli`, `app`, `environment` |
 
 Direction: `settings`, `options`, `cli`, `timer` and `environment` never name
@@ -45,8 +45,8 @@ phase follows which) is written once, in `timer`, and the ribbon reads it.
 | Environment snapshot | `main`, read once at start | tier detection, progress detection | none |
 | Timer | a local in `app`'s run function | `view` shared for one draw; commands exclusive for one call | nothing persists |
 | Effect manager | `app`'s run function, through `motion` | exclusive inside each draw, after the widgets render | dropped at quit |
-| Terminal session | `app`'s run function | the loop, exclusively | explicit `finish` clears progress, restores the title, then leaves raw mode; `Drop` restores only if `finish` never ran |
-| Clock readings | `app`, the only caller of `Instant::now` | passed by value | none |
+| Terminal session | `app`'s run function | the loop, exclusively, as its `Host` | explicit `finish` clears progress, restores the title, then leaves raw mode; `Drop` restores only if `finish` never ran |
+| Clock readings | the loop's host: `Session` reads `Instant::now`, a test's scripted host keeps its own time | passed by value | none |
 
 The frame pipeline is fixed: render the widgets in 24-bit palette colours, run the
 effects, then quantize the whole buffer to the tier. Effects turn every colour into
@@ -75,7 +75,7 @@ RGB mid-flight, so quantizing last is what keeps P04 to P06 true.
 | Contract K01–K03 | `KeyCode`, `KeyModifiers`, `KeyEventKind` | `src/terminal.rs` | O3 |
 | Contract M01–M05, C09, I01–I04 | `try_init`, `try_restore`, event polling, `is_terminal`, the bell byte, escape sequences | `src/terminal.rs` | O4 |
 | Contract D01–D13 | `Gauge`, `Layout`, `Canvas`, the on-screen labels | `src/view` | O5 |
-| Timer rows T01–T11 | `Instant::now` | `src/app.rs` | O6 |
+| Timer rows T01–T11, M09 | `Instant::now` | `src/terminal.rs`, the live host | O6 |
 | Direction rule above | `ratatui` | never in `settings`, `options`, `cli`, `timer`, `environment` | O7 |
 | Contract E01–E05 | `tachyonfx` | `src/motion.rs` | O8 |
 | Contract D06, D07, D12 | `tui_big_text` | `src/view/clock.rs` | O9 |
@@ -99,7 +99,7 @@ grep -rnE 'try_init|try_restore|event::(poll|read)|is_terminal|x07|x1b' src | gr
 # O5
 grep -rnE 'Gauge|Layout::|Canvas|"(Work|Short break|Long break|Running|Paused|Ready)"' src | grep -v -e 'src/view' -e '/tests.rs'
 # O6
-grep -rn 'Instant::now' src | grep -v -e 'src/app.rs' -e '/tests.rs'
+grep -rn 'Instant::now' src | grep -v -e 'src/terminal.rs' -e '/tests.rs'
 # O7
 grep -rln 'ratatui' src | grep -E 'src/(settings|options|cli|timer|environment)\.rs'
 # O8
@@ -177,9 +177,10 @@ Iterate with the baseline's fast check; each slice ends with its full check, a
 review in `evidence/`, and hosted CI.
 
 Done: S1 (a bar that counts down), S2 (the pomodoro cycle), S3 (the command line),
-S4 (palette, glyphs and capabilities), S5 (the showpiece), S6 (motion) and S7
-(terminal integration). Their reviews are `evidence/s1-review.md` to
-`evidence/s7-review.md`; M08 and the Linux runs of M01, M03 and M04 are still open.
+S4 (palette, glyphs and capabilities), S5 (the showpiece), S6 (motion), S7
+(terminal integration) and S8 (the loop seam). Their reviews are
+`evidence/s1-review.md` to `evidence/s8-review.md`; M08 and the Linux runs of M01,
+M03 and M04 are still open.
 
 ### S9: a parser crate
 
@@ -212,4 +213,4 @@ S4 (palette, glyphs and capabilities), S5 (the showpiece), S6 (motion) and S7
 | The title stack is unverified in Windows Terminal | agent | restore by stack where supported; record what M06 shows |
 | A slow terminal drops frames | agent | effects are time-based; frames are area-limited |
 
-Status: slices 1 to 7 have passed their checks and hosted CI; S9 is in review.
+Status: slices 1 to 8 have passed their checks and hosted CI; S9 is in review.

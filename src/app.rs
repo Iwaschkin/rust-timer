@@ -1,5 +1,5 @@
-//! The run loop: read the clock, end phases, run effects, draw, signal the window
-//! title and taskbar, and act on keys until the user quits.
+//! The run loop: read the time, end phases, run effects, draw, signal the window
+//! title and taskbar, and act on keys until the user quits, all through a [`Host`].
 //!
 //! Each frame is drawn in three steps: the widgets, then the running effects, then
 //! the fit to the terminal's colour tier.
@@ -7,7 +7,7 @@
 use crate::motion::{self, Choreography, Cue, Motion};
 use crate::options::Appearance;
 use crate::settings::Settings;
-use crate::terminal::{self, Command, RunFailure, Session, Taskbar, TerminalError};
+use crate::terminal::{self, Command, Host, RunFailure, Session, Taskbar, TerminalError};
 use crate::theme;
 use crate::timer::{Phase, State, Timer};
 use crate::view;
@@ -34,47 +34,48 @@ pub(crate) fn run(
     session.finish(outcome)
 }
 
+/// The loop itself, against `host`: the live session, or a scripted one in a test.
 fn run_loop(
-    session: &mut Session,
+    host: &mut impl Host,
     settings: Settings,
     appearance: Appearance,
     motion: Motion,
 ) -> Result<(), TerminalError> {
-    let started = Instant::now();
+    let started = host.now();
     let mut timer = Timer::start(settings, started);
     let mut choreography = Choreography::new(motion);
     choreography.cue(Cue::Start);
     let mut signals = Signals::default();
     let mut last_frame = started;
     loop {
-        let now = Instant::now();
+        let now = host.now();
         let before = (timer.phase(), timer.state());
         if timer.tick(now) {
-            session.ring_bell()?;
+            host.ring_bell()?;
         }
         cue(&mut choreography, before, &timer);
         let elapsed = now.saturating_duration_since(last_frame);
         last_frame = now;
-        session.draw(|frame| {
+        host.draw(|frame| {
             view::render(frame, &timer, now, appearance, &terminal::KEYS);
             choreography.render(elapsed, frame.buffer_mut());
             theme::quantize(frame.buffer_mut(), appearance.depth);
         })?;
         if let Some(title) = signals.title(view::window_title(&timer, now, appearance.glyphs)) {
-            session.set_title(&title)?;
+            host.set_title(&title)?;
         }
         if let Some(progress) = signals.taskbar(taskbar(&timer, now), now) {
-            session.set_taskbar(progress)?;
+            host.set_taskbar(progress)?;
         }
         let wait = motion::wake_interval(
             choreography.running(),
             timer.state() == State::Running,
             timer.remaining(now),
         );
-        let Some(command) = session.next_command(wait)? else {
+        let Some(command) = host.next_command(wait)? else {
             continue;
         };
-        let now = Instant::now();
+        let now = host.now();
         let before = (timer.phase(), timer.state());
         let ended = match command {
             Command::StartPause => timer.toggle(now),
@@ -82,7 +83,7 @@ fn run_loop(
             Command::Quit => return Ok(()),
         };
         if ended {
-            session.ring_bell()?;
+            host.ring_bell()?;
         }
         cue(&mut choreography, before, &timer);
     }

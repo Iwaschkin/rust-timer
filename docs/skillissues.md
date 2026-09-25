@@ -247,3 +247,38 @@ arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
   AGENTS.md template and the kickoff. Each rebased commit has the same tree as the
   one it replaced, so the reviews' results hold for main's `0a6260b`, `bf09b4f`,
   `432bba8` and `6c7f740`, in that order.
+
+### SI-16 Both skills show only hand-written parsers, and the contract ruled out a library (misleads)
+
+- **Where:** rust-project-plan's example plan and workflow, the baseline's
+  contracts example, and the contract rows C02 to C11; found by an external
+  review of the code after slice 7.
+- **What happened:** the reviewer found 8.7 KB of bespoke argument parsing where
+  clap, lexopt or pico-args would do. The plan wrote "the standard library reads
+  the command line" with no reason given: the plan skill's only example is a
+  "standard library only" CLI, and the baseline points at its dependency-free
+  contracts example for CLI behaviour. The contract, written before any crate
+  was chosen, then fixed edge cases a parser crate handles its own way: it
+  rejected `--work=5`, accepted `--help` beside an invalid argument, and reported
+  the first wrong argument in order. Only hand-written code could meet it.
+- **Expected:** a default to reuse a maintained crate for a solved problem, with
+  the choice made before the contract rows it affects, which then state what the
+  crate guarantees.
+- **Done:** rust-skills 0.5.0-rc.6 adds that default to rust-design and the plan
+  format, and the two examples now say their one positional argument is why they
+  parse by hand. Slice S9 (PR #9) replaces the parser with clap and rewrites C02
+  to C08, C11 and C15 to clap's behaviour.
+
+### SI-17 No rule for when a loop needs its own seam (friction)
+
+- **Where:** the baseline's rust-design reference; found by the same review.
+- **What happened:** the timer took the time as a parameter, as the plan intended,
+  but the loop read `Instant::now` and the keys itself. Sequences through the
+  loop, such as run, pause, resume and a phase end with one bell, could be tested
+  only inside `Timer`, and the program's half of M03 needed a pseudo-console
+  capture (SI-12).
+- **Expected:** a rule saying when the loop takes a clock and an event source:
+  when a promised outcome comes from the loop's own sequencing.
+- **Done:** rust-skills 0.5.0-rc.6 adds that rule as a rust-design row. Slice S8
+  (PR #8) gives the loop a `Host`, and `loop_rings_one_bell_at_phase_end` drives a
+  one-minute phase through a 90 s pause to exactly one bell (row M09).

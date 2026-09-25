@@ -5,6 +5,7 @@
 //! phase end that has already passed, then applies itself.
 
 use crate::settings::Settings;
+use std::iter;
 use std::time::{Duration, Instant};
 
 /// A phase of the cycle.
@@ -159,23 +160,19 @@ impl Timer {
         self.clock = Clock::Ready;
     }
 
-    /// Every phase of the cycle, in order, with its length.
-    pub(crate) fn cycle(&self) -> Vec<Segment> {
-        let mut at = (Phase::Work, 1);
-        let mut segments = Vec::new();
-        loop {
-            segments.push(Segment {
-                phase: at.0,
-                length: self.length_of(at.0),
-            });
-            if at.0 == Phase::LongBreak {
-                return segments;
-            }
-            at = following(at.0, at.1, self.rounds());
-        }
+    /// Every phase of the cycle, in order, with its length, computed as it is read.
+    pub(crate) fn segments(&self) -> impl Iterator<Item = Segment> + Clone {
+        let rounds = self.rounds();
+        iter::successors(Some((Phase::Work, 1)), move |&(phase, round)| {
+            (phase != Phase::LongBreak).then(|| following(phase, round, rounds))
+        })
+        .map(|(phase, _)| Segment {
+            phase,
+            length: self.length_of(phase),
+        })
     }
 
-    /// Where the current phase sits in [`Timer::cycle`].
+    /// Where the current phase sits in [`Timer::segments`].
     pub(crate) fn position(&self) -> usize {
         let before = usize::from(self.round.saturating_sub(1)) * 2;
         match self.phase {
