@@ -28,8 +28,8 @@
 
 ## Open limits (at most 3)
 
-- M06 to M08, the demonstrator by hand in Windows Terminal, VS Code and a Linux terminal, are not run.
-- Whether Windows Terminal's taskbar shows the paused and waiting states has not been seen, only captured.
+- Windows: M06 in Windows Terminal and M07 in VS Code's terminal pass (owner, 2026-09-25).
+- Linux terminal: TBD. M08, and M01, M03 and M04 from S3, are not run yet; the owner plans them later on 2026-09-25.
 - Windows CI skips release-mode tests; only Linux ran them.
 
 Semantic review and hosted results are separate lines above; a passing command does not
