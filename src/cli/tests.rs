@@ -1,13 +1,20 @@
 use super::{Invocation, parse};
+use crate::glyphs::GlyphTier;
+use crate::options::{Choice, Options};
 use crate::settings::Settings;
+use crate::theme::ColorDepth;
 use std::ffi::OsString;
 
-fn settings(arguments: &[&str]) -> Settings {
+fn options(arguments: &[&str]) -> Options {
     let invocation = parse(arguments.iter().map(OsString::from));
-    let Ok(Invocation::Run(settings)) = invocation else {
+    let Ok(Invocation::Run(options)) = invocation else {
         panic!("{arguments:?} should run, got {invocation:?}");
     };
-    settings
+    options
+}
+
+fn settings(arguments: &[&str]) -> Settings {
+    options(arguments).settings
 }
 
 #[test]
@@ -30,4 +37,32 @@ fn accepts_bounds_and_leading_zeros() {
     );
     assert_eq!(chosen, (50, 3, 20, 2));
     assert_eq!(settings(&[]), Settings::default());
+}
+
+#[test]
+fn accepts_appearance_choices() {
+    let colors = [
+        ("auto", Choice::Auto),
+        ("truecolor", Choice::Fixed(ColorDepth::TrueColor)),
+        ("256", Choice::Fixed(ColorDepth::Ansi256)),
+        ("16", Choice::Fixed(ColorDepth::Ansi16)),
+        ("none", Choice::Fixed(ColorDepth::None)),
+    ];
+    for (word, expected) in colors {
+        assert_eq!(options(&["--color", word]).color, expected, "{word}");
+    }
+    let glyphs = [
+        ("auto", Choice::Auto),
+        ("emoji", Choice::Fixed(GlyphTier::Emoji)),
+        ("symbols", Choice::Fixed(GlyphTier::Symbols)),
+        ("ascii", Choice::Fixed(GlyphTier::Ascii)),
+    ];
+    for (word, expected) in glyphs {
+        assert_eq!(options(&["--glyphs", word]).glyphs, expected, "{word}");
+    }
+    let defaults = options(&[]);
+    assert_eq!(
+        (defaults.color, defaults.glyphs),
+        (Choice::Auto, Choice::Auto)
+    );
 }

@@ -1,8 +1,11 @@
 //! The command line: flags, usage text and argument errors.
 //!
-//! This is the only module that names the flags.
+//! This is the only module that names the flags and their choices.
 
+use crate::glyphs::GlyphTier;
+use crate::options::{Choice, Options};
 use crate::settings::{InvalidNumber, RANGE, Settings};
+use crate::theme::ColorDepth;
 use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
@@ -10,8 +13,8 @@ use std::fmt;
 /// What the command line asks for.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Invocation {
-    /// Run the timer with these settings.
-    Run(Settings),
+    /// Run the timer with these options.
+    Run(Options),
     /// Print the usage text.
     Help,
 }
@@ -27,10 +30,21 @@ pub(crate) enum Flag {
     Long,
     /// `--every`.
     Every,
+    /// `--color`.
+    Color,
+    /// `--glyphs`.
+    Glyphs,
 }
 
 impl Flag {
-    const ALL: [Self; 4] = [Self::Work, Self::Short, Self::Long, Self::Every];
+    const ALL: [Self; 6] = [
+        Self::Work,
+        Self::Short,
+        Self::Long,
+        Self::Every,
+        Self::Color,
+        Self::Glyphs,
+    ];
 
     fn name(self) -> &'static str {
         match self {
@@ -38,6 +52,8 @@ impl Flag {
             Self::Short => "--short",
             Self::Long => "--long",
             Self::Every => "--every",
+            Self::Color => "--color",
+            Self::Glyphs => "--glyphs",
         }
     }
 
@@ -49,6 +65,33 @@ impl Flag {
 impl fmt::Display for Flag {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.name())
+    }
+}
+
+/// The words `--color` accepts.
+const COLORS: [(&str, Choice<ColorDepth>); 5] = [
+    ("auto", Choice::Auto),
+    ("truecolor", Choice::Fixed(ColorDepth::TrueColor)),
+    ("256", Choice::Fixed(ColorDepth::Ansi256)),
+    ("16", Choice::Fixed(ColorDepth::Ansi16)),
+    ("none", Choice::Fixed(ColorDepth::None)),
+];
+
+/// The words `--glyphs` accepts.
+const GLYPHS: [(&str, Choice<GlyphTier>); 4] = [
+    ("auto", Choice::Auto),
+    ("emoji", Choice::Fixed(GlyphTier::Emoji)),
+    ("symbols", Choice::Fixed(GlyphTier::Symbols)),
+    ("ascii", Choice::Fixed(GlyphTier::Ascii)),
+];
+
+/// The words of a choice flag, joined for the usage text and error messages.
+fn words<T>(choices: &[(&str, T)]) -> String {
+    let names: Vec<&str> = choices.iter().map(|(name, _)| *name).collect();
+    match names.split_last() {
+        Some((last, [])) => (*last).to_owned(),
+        Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+        None => String::new(),
     }
 }
 
@@ -70,6 +113,15 @@ pub(crate) enum UsageError {
         /// Why its value was rejected.
         source: InvalidNumber,
     },
+    /// A flag's value is not one of its words.
+    InvalidChoice {
+        /// The flag.
+        flag: Flag,
+        /// The rejected value.
+        value: String,
+        /// The words it accepts.
+        accepted: String,
+    },
 }
 
 impl fmt::Display for UsageError {
@@ -80,6 +132,14 @@ impl fmt::Display for UsageError {
             Self::Repeated(flag) => write!(formatter, "{flag} given more than once"),
             Self::MissingValue(flag) => write!(formatter, "{flag} needs a value"),
             Self::InvalidValue { flag, .. } => write!(formatter, "invalid value for {flag}"),
+            Self::InvalidChoice {
+                flag,
+                value,
+                accepted,
+            } => write!(
+                formatter,
+                "invalid value for {flag}: {value:?} is not one of {accepted}"
+            ),
         }
     }
 }
@@ -88,9 +148,11 @@ impl Error for UsageError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::InvalidValue { source, .. } => Some(source),
-            Self::NotUnicode(_) | Self::Unknown(_) | Self::Repeated(_) | Self::MissingValue(_) => {
-                None
-            }
+            Self::NotUnicode(_)
+            | Self::Unknown(_)
+            | Self::Repeated(_)
+            | Self::MissingValue(_)
+            | Self::InvalidChoice { .. } => None,
         }
     }
 }
@@ -103,6 +165,19 @@ fn text(argument: &OsStr) -> Result<&str, UsageError> {
     argument
         .to_str()
         .ok_or_else(|| UsageError::NotUnicode(argument.to_string_lossy().into_owned()))
+}
+
+/// The choice `value` names among `choices`.
+fn choose<T: Copy>(flag: Flag, value: &str, choices: &[(&str, T)]) -> Result<T, UsageError> {
+    choices
+        .iter()
+        .find(|(name, _)| *name == value)
+        .map(|(_, choice)| *choice)
+        .ok_or_else(|| UsageError::InvalidChoice {
+            flag,
+            value: value.to_owned(),
+            accepted: words(choices),
+        })
 }
 
 /// Reads the arguments after the program name.
@@ -121,7 +196,7 @@ pub(crate) fn parse(
     if arguments.iter().any(|argument| is_help(argument)) {
         return Ok(Invocation::Help);
     }
-    let mut settings = Settings::default();
+    let mut options = Options::default();
     let mut seen = Vec::new();
     let mut remaining = arguments.iter();
     while let Some(argument) = remaining.next() {
@@ -133,28 +208,35 @@ pub(crate) fn parse(
         seen.push(flag);
         let value = text(remaining.next().ok_or(UsageError::MissingValue(flag))?)?;
         let invalid = |source| UsageError::InvalidValue { flag, source };
+        let settings = &mut options.settings;
         match flag {
             Flag::Work => settings.work = value.parse().map_err(invalid)?,
             Flag::Short => settings.short_break = value.parse().map_err(invalid)?,
             Flag::Long => settings.long_break = value.parse().map_err(invalid)?,
             Flag::Every => settings.every = value.parse().map_err(invalid)?,
+            Flag::Color => options.color = choose(flag, value, &COLORS)?,
+            Flag::Glyphs => options.glyphs = choose(flag, value, &GLYPHS)?,
         }
     }
-    Ok(Invocation::Run(settings))
+    Ok(Invocation::Run(options))
 }
 
 /// The usage text, ending with `key_help`.
 pub(crate) fn usage(key_help: &str) -> String {
     let defaults = Settings::default();
     let (low, high) = (RANGE.start(), RANGE.end());
+    let (colors, glyphs) = (words(&COLORS), words(&GLYPHS));
     format!(
         "usage: pomodoro [--work MIN] [--short MIN] [--long MIN] [--every N]\n\
+         \x20               [--color WHEN] [--glyphs SET]\n\
          \n\
-         \x20 --work MIN   work phase length in minutes, {low} to {high} (default {work})\n\
-         \x20 --short MIN  short break length in minutes, {low} to {high} (default {short})\n\
-         \x20 --long MIN   long break length in minutes, {low} to {high} (default {long})\n\
-         \x20 --every N    work phases before a long break, {low} to {high} (default {every})\n\
-         \x20 -h, --help   print this help\n\
+         \x20 --work MIN     work phase length in minutes, {low} to {high} (default {work})\n\
+         \x20 --short MIN    short break length in minutes, {low} to {high} (default {short})\n\
+         \x20 --long MIN     long break length in minutes, {low} to {high} (default {long})\n\
+         \x20 --every N      work phases before a long break, {low} to {high} (default {every})\n\
+         \x20 --color WHEN   colours: {colors} (default auto)\n\
+         \x20 --glyphs SET   pictures: {glyphs} (default auto)\n\
+         \x20 -h, --help     print this help\n\
          \n\
          keys: {key_help}\n",
         work = defaults.work.get(),

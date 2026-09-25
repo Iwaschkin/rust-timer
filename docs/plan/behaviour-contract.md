@@ -49,7 +49,7 @@ a monotonic clock instant.
 
 | ID | Given | Then | Evidence |
 | --- | --- | --- | --- |
-| D01 | remaining 25:00.000, 24:59.001, 24:59.000, 0:00.001, 0:00.000, 99:00.000 | bar label `25:00`, `25:00`, `24:59`, `00:01`, `00:00`, `99:00` | `remaining_label_rounds_up_to_whole_seconds` |
+| D01 | remaining 25:00.000, 24:59.001, 24:59.000, 0:00.001, 0:00.000, 99:00.000 | the time shown as `25:00`, `25:00`, `24:59`, `00:01`, `00:00`, `99:00` | `remaining_label_rounds_up_to_whole_seconds` |
 | D02 | elapsed 0, `L/2`, `L`; a reading before the start; a reading 3 hours after the end | progress 0, 0.5, 1, 0, 1; progress is never outside 0 to 1 | `progress_stays_within_unit_interval` |
 | D03 | a 60 × 10 terminal | the frame shows the phase name (`Work`, `Short break` or `Long break`), the state (`Running`, `Paused` or `Ready`), `Round k of N`, the bar with its label, and the key help | `frame_shows_phase_state_round_and_keys` |
 | D04 | terminals of 0 × 0, 1 × 1, 10 × 3 and 30 × 8, in every state, with and without the Ready popup | a frame is drawn; no panic | `renders_in_tiny_terminals` |

@@ -180,7 +180,8 @@ line), covering C01–C11, T01–T11, D01–D05, K01–K03 and M01–M05. Their 
 - Files: `environment`, `theme`, `glyphs`, `options` (new); `cli` (three flags);
   `view` (painted background, phase border types, key caps, glyphs); `app` (the
   quantize pass after each draw); `main` (snapshot at start).
-- Rows: C08 (updated), C12–C15, P01–P08, G01–G03, D03 re-checked.
+- Rows: C08 (updated), C12, C13, C15 (for `--color` and `--glyphs`), P01–P08,
+  G01–G03, D03 re-checked. `--motion` waits for S6, where something reads it.
 - Failing test first: `no_color_keeps_modifiers`, which exposes crossterm's
   attribute reset if colour is left to it; then `color_depth_follows_environment`.
 - Adds no dependency.
@@ -196,9 +197,9 @@ line), covering C01–C11, T01–T11, D01–D05, K01–K03 and M01–M05. Their 
 
 ### S6: motion
 
-- Files: `motion` (new, tachyonfx); `app` (effect events, wake-up interval,
-  synchronized output); `cli`/`options` already carry `--motion`.
-- Rows: E01–E05, with `alert_pulse_is_slow_enough` first.
+- Files: `motion` (new, tachyonfx); `cli`, `options` (`--motion`); `app` (effect events, wake-up interval,
+  synchronized output).
+- Rows: C14, E01–E05, with `alert_pulse_is_slow_enough` first.
 
 ### S7: terminal integration
 

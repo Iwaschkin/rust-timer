@@ -75,10 +75,19 @@ pomodoro --help               # the options, their ranges and defaults, and the 
 | `--short MIN` | the length of a short break, in minutes | 1 to 99 | 5 |
 | `--long MIN` | the length of a long break, in minutes | 1 to 99 | 15 |
 | `--every N` | how many work phases come before a long break | 1 to 99 | 4 |
+| `--color WHEN` | the colours to use | `auto`, `truecolor`, `256`, `16`, `none` | `auto` |
+| `--glyphs SET` | the pictures beside the text | `auto`, `emoji`, `symbols`, `ascii` | `auto` |
 | `-h`, `--help` | print the usage and exit | | |
 
-Each option takes a whole number, given as the next argument (`--work 50`, not
-`--work=50`), and can appear once. `--help` wins wherever it appears.
+Each option's value is the next argument (`--work 50`, not `--work=50`), and each
+option can appear once. `--help` wins wherever it appears.
+
+With `auto`, pomodoro picks the colours and pictures from the terminal it runs in.
+It uses 24-bit colour in Windows Terminal, VS Code and any terminal that sets
+`COLORTERM=truecolor`, and falls back to 256 or 16 colours elsewhere. Setting
+`NO_COLOR` to any non-empty value turns colour off, and `--color` overrides it.
+Emoji are used everywhere except the old Windows console, which gets symbols, and
+the Linux console, which gets plain ASCII.
 
 ### Keys
 
@@ -146,8 +155,11 @@ the message is printed.
 - **The time looks wrong after the computer slept**: whether the clock counts time
   asleep depends on the platform. After waking, the phase may have ended or may
   carry on where it stopped.
-- **Odd characters in place of the `·` or the bar**: use a terminal with UTF-8 and
-  a font that has box-drawing characters, such as Windows Terminal.
+- **Odd characters in place of the `·`, the bar or the emoji**: use a terminal with
+  UTF-8 and a font that has box-drawing characters, such as Windows Terminal. If
+  emoji look misaligned, `--glyphs symbols` swaps them for one-cell symbols.
+- **Colours look wrong**: `--color 256` or `--color 16` forces a smaller palette,
+  and `--color none` uses the terminal's own colours.
 
 ## Development
 

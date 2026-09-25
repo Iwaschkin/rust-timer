@@ -21,8 +21,22 @@ pub(crate) enum Command {
     Quit,
 }
 
-/// The keys, as the screen lists them.
-pub(crate) const KEY_HELP: &str = "space start/pause · s skip · q quit";
+/// The keys and what they do, as the screen and the usage text list them.
+pub(crate) const KEYS: [(&str, &str); 3] = [("space", "start/pause"), ("s", "skip"), ("q", "quit")];
+
+/// The keys on one line, for the usage text.
+pub(crate) fn key_help() -> String {
+    KEYS.iter()
+        .map(|(key, action)| format!("{key} {action}"))
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+/// Whether the console takes 24-bit colour, as crossterm judges it. On Windows
+/// that is whether virtual-terminal output could be enabled.
+pub(crate) fn console_truecolor() -> bool {
+    ratatui::crossterm::style::available_color_count() == u16::MAX
+}
 
 /// The command a terminal event asks for, if any. Only key presses count: Windows
 /// also reports releases, which would otherwise act twice.

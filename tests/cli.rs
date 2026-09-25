@@ -149,6 +149,11 @@ fn help_prints_usage() -> io::Result<()> {
             "default 5",
             "default 15",
             "default 4",
+            "--color",
+            "--glyphs",
+            "truecolor",
+            "emoji",
+            "default auto",
             "space",
         ] {
             assert!(stdout.contains(expected), "{expected:?} in\n{stdout}");
@@ -168,5 +173,18 @@ fn argument_errors_precede_terminal_check() -> io::Result<()> {
 fn reports_first_wrong_argument() -> io::Result<()> {
     let stderr = usage_error(&["--work", "0", "--wrok", "5"], &["--work", "\"0\""])?;
     assert!(!stderr.contains("wrok"), "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn rejects_unknown_choice() -> io::Result<()> {
+    usage_error(
+        &["--color", "8"],
+        &["--color", "\"8\"", "auto, truecolor, 256, 16 or none"],
+    )?;
+    usage_error(
+        &["--glyphs", "fancy"],
+        &["--glyphs", "\"fancy\"", "auto, emoji, symbols or ascii"],
+    )?;
     Ok(())
 }
