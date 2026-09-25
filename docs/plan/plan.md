@@ -4,7 +4,7 @@ Reader: the agent implementing `pomodoro`.
 
 Behaviour is fixed by the behaviour contract; row ids below refer to it. Commands,
 lints and evidence rules come from `rust-quality-baseline`; this plan copies none
-of them.
+of them. The research behind the overhaul is in `docs/research/visual-overhaul.md`.
 
 ## 1. Structure and boundaries
 
@@ -12,241 +12,217 @@ The project root is the repository root. It holds one Cargo package, `pomodoro`:
 application with a binary target and no library target, `publish = false`. The
 baseline's `xtask/` sits beside it as its own workspace with its own lock.
 
-A library target is not justified: no consumer outside the binary uses these types.
-Unit tests therefore live beside their module, in `src/<module>/tests.rs`, declared
-with `#[cfg(test)] mod tests;`. Keeping tests in their own files lets the ownership
-checks below scan production code only. The command-line rows run against the built
-binary from `tests/cli.rs`.
+Unit tests live beside their module, in `src/<module>/tests.rs`, declared with
+`#[cfg(test)] mod tests;`, so the ownership checks can exclude them by path. The
+command-line rows run against the built binary from `tests/cli.rs`, which bounds
+every child it spawns.
 
 | Module | Owns | Depends on |
 | --- | --- | --- |
-| `settings` | phase-length and interval value types, the range 1 to 99, the defaults | std |
-| `cli` | the argument grammar, usage text, the usage error type | `settings` |
-| `timer` | phase, round and timer state, transitions, remaining time, progress | `settings`, `std::time` |
-| `view` | layout, the bar, phase and state labels, the remaining-time label | `timer`, ratatui widgets and layout |
-| `terminal` | entering and restoring the terminal, the terminal check, key mapping, key help text, the bell, the command enum | ratatui's crossterm backend and re-export |
-| `app` | the run loop: read the clock, tick, draw, apply commands; the run error type | `settings`, `timer`, `view`, `terminal` |
-| `main` | reading `args_os`, exit codes, rendering error chains | `cli`, `app` |
+| `settings` | phase lengths and interval, their range, defaults and parsing | std |
+| `options` | everything the command line chooses: the settings, the colour and glyph choices (`auto` or a fixed tier) and motion on or off | `settings`, `theme`, `glyphs` |
+| `cli` | the argument grammar, usage text, usage errors | `options` |
+| `environment` | one snapshot of the environment variables that decide colour, glyphs and progress support; which terminal this is | std |
+| `theme` | the palette (every RGB value), colour tiers and their detection, the per-frame quantize pass, the contrast maths | ratatui style and buffer, `environment` |
+| `glyphs` | glyph roles, the three tier tables, tier detection | `environment` |
+| `timer` | phases, rounds, states, transitions, remaining time, progress, the cycle's phase list | `settings` |
+| `view` | the three layouts and their composition, labels | `timer`, `theme`, `glyphs`, ratatui widgets |
+| `view/clock`, `view/bar`, `view/dial`, `view/ribbon`, `view/popup` | the big digits, the gradient bar, the braille dial, the cycle ribbon, the Ready popup | `theme`, ratatui; `view/clock` also tui-big-text |
+| `motion` | which effect runs on which event, the effect manager, the wake-up interval | tachyonfx, `theme`, ratatui buffer |
+| `terminal` | entering and restoring the terminal, keys, the bell, the window title, OSC 9;4 progress, synchronized output | ratatui's crossterm |
+| `app` | the loop: read the clock, tick, run effects, draw, update title and progress, act on keys | all of the above |
+| `main` | reading `args_os` and the environment, exit codes, error chains | `cli`, `app`, `environment` |
 
-Direction: `settings`, `cli` and `timer` never name ratatui or crossterm. `view` uses
-only backend-independent ratatui items, so it does not depend on `terminal`; `app`
-passes it the key help text. `terminal` is the only module that names crossterm.
+Direction: `settings`, `options`, `cli`, `timer` and `environment` never name
+ratatui. `view` never names crossterm or tachyonfx. The timer's cycle rule (which
+phase follows which) is written once, in `timer`, and the ribbon reads it.
 
 ### Values and ownership
 
 | Value or resource | Owner | Borrowed by | Completion |
 | --- | --- | --- | --- |
-| Settings | copied into the timer at start | `view`, reading through the timer | none |
-| Timer | a local in `app`'s run function | `view`, shared for one draw; command handling, exclusive for one call | dropped at quit; nothing persists |
-| Terminal session (ratatui's `DefaultTerminal`) | `app`'s run function, created on entry | the loop, exclusively, for draw, input and bell | an explicit consuming `finish` that returns the restore result; `Drop` restores only when `finish` never ran; ratatui's panic hook restores on panic |
-| Standard output | the session's backend | the bell writes through the backend writer | flushed after each draw and after the bell |
-| Clock readings | `app`, the only caller of `Instant::now` | passed by value into every timer operation | none |
+| Options | `main`, moved into `app::run` | the loop reads them | none |
+| Environment snapshot | `main`, read once at start | tier detection, progress detection | none |
+| Timer | a local in `app`'s run function | `view` shared for one draw; commands exclusive for one call | nothing persists |
+| Effect manager | `app`'s run function, through `motion` | exclusive inside each draw, after the widgets render | dropped at quit |
+| Terminal session | `app`'s run function | the loop, exclusively | explicit `finish` clears progress, restores the title, then leaves raw mode; `Drop` restores only if `finish` never ran |
+| Clock readings | `app`, the only caller of `Instant::now` | passed by value | none |
 
-Timer state is an enum of Running, Paused and Ready. Running holds the instant it
-last started and the time already banked; Paused holds the banked time; Ready holds
-nothing. Elapsed time is `banked` plus `now.saturating_duration_since(since)`, added
-with saturating arithmetic and capped at the phase length. No code adds a `Duration`
-to an `Instant`, because that addition panics on overflow and the representation
-does not need it. Every timer operation first observes a passed phase end, then
-applies itself (T10). A reading at or after the end moves one phase and no further (T09).
+The frame pipeline is fixed: render the widgets in 24-bit palette colours, run the
+effects, then quantize the whole buffer to the tier. Effects turn every colour into
+RGB mid-flight, so quantizing last is what keeps P04 to P06 true.
 
-Progress is a private-field type built only from elapsed time and a phase length,
-with `Duration::div_duration_f64`. Phase length is never zero (value table), so the
-ratio is defined, and the cap keeps it within 0 to 1. This type is what makes
-ratatui's `Gauge::ratio` panic unreachable (D02).
+### Lint and library traps decided here
 
-The round counter is bounded by `N`: it resets to 1 by comparison after the long
-break, rather than taking a remainder of an ever-growing count.
-
-### Lint interactions decided here
-
-- crossterm's `Event` and `KeyCode` are large foreign enums. A wildcard arm on them
-  trips `wildcard_enum_match_arm`. Use `let … else`, `if let` and equality instead;
-  a scratch probe with those forms passed Clippy clean. An expectation here is a
-  review item, not a default.
-- Ctrl-C reaches the program as a `c` key press with the Ctrl modifier; raw mode
-  delivers no signal. The probe confirmed it. K01 and K03 pin both sides.
-- Windows reports key releases as well as presses; only presses map to commands (K02).
-- `main` returns `std::process::ExitCode`; the `exit` lint forbids `process::exit`.
-- `std::env::args` panics on a non-Unicode argument; read `args_os` (C07).
-- Split areas with `Layout::areas` into a fixed-size array; no indexing.
-- Casts are avoided: minutes become seconds through `u64::from`, and progress
-  comes from `div_duration_f64`.
+- `Gauge::ratio`, `Gauge::percent` and tachyonfx's `hsl_shift(None, None, ..)`
+  panic: clamp every ratio; use `hsl_shift_fg`.
+- Use `Buffer::cell_mut`, never `buf[(x, y)]`; `Layout::areas::<N>` stays in step
+  with its constraint array.
+- `symbols::Marker` and crossterm's enums are foreign and large: use `let … else`
+  and equality, or a reasoned expectation at a foreign non-exhaustive match.
+- In tier none, every colour becomes `Reset` before drawing; crossterm's own
+  NO_COLOR path would write `ESC[;m` and drop bold (research 3.1).
+- Only the safe emoji set of research 4.4 is used; G02 tests it.
 
 ### Ownership checks
 
 | Document or section | Vocabulary | Only allowed in | Check |
 | --- | --- | --- | --- |
-| Contract C01–C11 | `--work`, `--short`, `--long`, `--every`, `--help` | `src/cli.rs` | O1 |
+| Contract C01–C15 | the flag names | `src/cli.rs` | O1 |
 | Value table | the range bound 99 and the default 25 | `src/settings.rs` | O2 |
 | Contract K01–K03 | `KeyCode`, `KeyModifiers`, `KeyEventKind` | `src/terminal.rs` | O3 |
-| Contract M01–M05, C09 | `try_init`, `try_restore`, `event::poll`, `event::read`, `is_terminal`, the bell byte | `src/terminal.rs` | O4 |
-| Contract D01–D05 | `Gauge`, `Layout`, and the on-screen labels | `src/view.rs` | O5 |
+| Contract M01–M05, C09, I01–I04 | `try_init`, `try_restore`, event polling, `is_terminal`, the bell byte, escape sequences | `src/terminal.rs` | O4 |
+| Contract D01–D13 | `Gauge`, `Layout`, `Canvas`, the on-screen labels | `src/view` | O5 |
 | Timer rows T01–T11 | `Instant::now` | `src/app.rs` | O6 |
-| Direction rule above | `ratatui` | never in `settings`, `cli`, `timer` | O7 |
+| Direction rule above | `ratatui` | never in `settings`, `options`, `cli`, `timer`, `environment` | O7 |
+| Contract E01–E05 | `tachyonfx` | `src/motion.rs` | O8 |
+| Contract D06, D07, D12 | `tui_big_text` | `src/view/clock.rs` | O9 |
+| Contract P01–P08 | RGB colour values | `src/theme.rs` | O10 |
+| Contract P01, G01, I02 | environment variable names | `src/environment.rs` | O11 |
+| Contract G01–G03 | emoji | `src/glyphs.rs` | O12 |
 
 Each command below must print nothing. Run them from the repository root in a POSIX
 shell.
 
 ~~~sh
 # O1
-grep -rnE -e '--(work|short|long|every|help)' src | grep -v -e 'src/cli.rs' -e '/tests.rs'
+grep -rnE -e '--(work|short|long|every|help|color|glyphs|motion)' src | grep -v -e 'src/cli.rs' -e '/tests.rs'
 # O2
 grep -rnwE '99|25' src | grep -v -e 'src/settings.rs' -e '/tests.rs'
 # O3
 grep -rnE 'KeyCode|KeyModifiers|KeyEventKind' src | grep -v -e 'src/terminal.rs' -e '/tests.rs'
 # O4
-grep -rnE 'try_init|try_restore|event::(poll|read)|is_terminal|x07' src | grep -v 'src/terminal.rs'
+grep -rnE 'try_init|try_restore|event::(poll|read)|is_terminal|x07|x1b' src | grep -v 'src/terminal.rs'
 # O5
-grep -rnE 'Gauge|Layout|"(Work|Short break|Long break|Running|Paused|Ready)"' src | grep -v -e 'src/view.rs' -e '/tests.rs'
+grep -rnE 'Gauge|Layout::|Canvas|"(Work|Short break|Long break|Running|Paused|Ready)"' src | grep -v -e 'src/view' -e '/tests.rs'
 # O6
 grep -rn 'Instant::now' src | grep -v -e 'src/app.rs' -e '/tests.rs'
 # O7
-grep -ln 'ratatui' src/settings.rs src/cli.rs src/timer.rs
+grep -rln 'ratatui' src | grep -E 'src/(settings|options|cli|timer|environment)\.rs'
+# O8
+grep -rn 'tachyonfx' src | grep -v -e 'src/motion.rs' -e '/tests.rs'
+# O9
+grep -rn 'tui_big_text' src | grep -v 'src/view/clock.rs'
+# O10
+grep -rnE 'from_u32|Color::Rgb' src | grep -v -e 'src/theme.rs' -e '/tests.rs'
+# O11
+grep -rnE 'NO_COLOR|COLORTERM|WT_SESSION|TERM_PROGRAM|VTE_VERSION' src | grep -v -e 'src/environment.rs' -e '/tests.rs'
+# O12
+grep -rn '🍅\|☕\|🌙\|🔔' src | grep -v -e 'src/glyphs.rs' -e '/tests.rs'
 ~~~
 
 A hit is a prompt to look, not proof of a defect.
 
 ## 2. Errors, compatibility and operations
 
-| Class | Examples | Shape | Outcome |
-| --- | --- | --- | --- |
-| Invalid input | C03–C07, C11 | one `cli` error enum: missing value, invalid value (flag, value, range), unknown argument, repeated flag, non-Unicode argument | one line on stderr, exit 2, before the terminal is touched |
-| Unusable environment | C09 | a run-error variant with no cause | one line on stderr, exit 1, nothing on stdout |
-| Terminal failure | M02 | a run-error variant holding the failed step (enter, draw, read input, ring bell, restore) and the `io::Error` as `source()` | terminal restored first; `main` prints the step, then the cause; exit 1 |
-| Restore failure after a run failure | M05 | both errors kept | both reported, run error first; exit 1 |
-| Programming defect | a dependency panic route | none: they are made unreachable, below | ratatui's panic hook restores the terminal |
-| Cancellation | Ctrl-C | the quit command, not a signal | the normal quit path, exit 0 |
-
-Each error's `Display` names only its own level; the cause travels through
-`source()`, and `main` alone renders the chain. The `terminal` module owns the
-restore sequence so every path reaches it: normal quit, a `?` return from the
-loop (through `Drop`), and a panic (through ratatui's hook). Use `try_init`, never
-`init` or `run`: those two panic when the terminal cannot be entered.
-
-Dependency panic routes and their guards:
-
-| Route | Guard | Evidence |
+| Class | Examples | Outcome |
 | --- | --- | --- |
-| `Gauge::ratio` outside 0 to 1 | the progress type | D02 |
-| `Layout::areas` with a constraint count unlike the array length | a programming defect | every render test in D03–D05 exercises it |
-| `ratatui::init`, `ratatui::run` | not called | O4 plus review |
-| `std::env::args` | not called | C07 |
+| Invalid input | C03–C07, C11, C15 | one `cli` error enum; one line on stderr, exit 2, before the terminal is touched |
+| Unusable environment | C09 | one line on stderr, exit 1, nothing on stdout |
+| Terminal failure | M02 | terminal restored first; `main` prints the step, then the cause; exit 1 |
+| Restore failure after a run failure | M05 | both reported, run error first; exit 1 |
+| Programming defect | a library panic route | made unreachable (section 1); ratatui's panic hook restores the terminal |
+| Cancellation | Ctrl-C | the quit command, exit 0 |
 
-Compatibility: an application with no published API, no semver promise and no
-features. `rust-version` is `1.98.1`, the baseline pin that `init` writes. We make no
-promise below it and run no MSRV lane. Supported targets are x86_64 Windows (MSVC)
-and x86_64 Linux (GNU). There are no auto-trait commitments.
+Writing the title, progress or synchronized-output sequences is a terminal step
+like drawing: a failure there is a terminal failure with its own step name.
 
-Operations: stdout carries only the alternate-screen interface or the `--help`
-usage; stderr carries errors. Settings come from flags over defaults, with no
-other source. There is one thread. The loop blocks in `event::poll` for at most
-250 ms, then ticks and redraws. That bounds how stale the screen can be, and it
-has no effect on timing accuracy (T03). There is no log output, because stdout
-belongs to the interface. The release profile keeps the baseline's overflow checks.
-Time arithmetic saturates, and minutes times 60 is at most 5,940, so no overflow
-path exists to trip them.
+Compatibility: an application, no published API, no features. `rust-version` is
+`1.98.1`, the baseline pin. Supported targets are x86_64 Windows (MSVC) and x86_64
+Linux (GNU).
 
-Concurrency: none. There are no tasks, threads or async runtime, so the conditional
-concurrency decisions do not apply.
+Operations: stdout carries only the interface or the usage. The loop wakes at the
+interval E03 chooses: 33 ms while an effect runs, otherwise the next whole second
+of the time left, and never more than 250 ms. Each frame is wrapped in
+synchronized output, which unsupporting terminals ignore. The research measured an
+idle frame at 111 bytes and the worst gradient effect near 41 KB. Concurrency:
+none; one thread, no async runtime.
 
 ### Dependencies below 1.0
 
 | Crate | Pinned version | API items relied on | Documentation read |
 | --- | --- | --- | --- |
-| ratatui, `default-features = false`, `features = ["crossterm"]` | 0.30.2 | `try_init`, `try_restore`, `DefaultTerminal`, `Terminal::new`, `Terminal::draw`, `Terminal::backend_mut`, `Frame::area`, `Frame::render_widget`, `Layout::vertical`, `Layout::areas`, `Constraint::Length`, `Gauge::ratio`, `Gauge::label`, `Gauge::block`, `Block::bordered`, `Paragraph::new`, `backend::TestBackend`, the `ratatui::crossterm` re-export | 0.30.2 source rustdoc: `init.rs` (init panics; try_init enables raw mode before the alternate screen; restore order), `lib.rs` re-exports, ratatui-widgets 0.3.2 `gauge.rs` (ratio panics outside 0..=1), ratatui-core 0.1.2 `layout.rs` (`areas` panics on count mismatch), `terminal/backend.rs`; a scratch compile probe on 2026-09-24 |
-| crossterm, through the ratatui re-export only | 0.29.0 | `event::poll`, `event::read`, `Event::Key`, `KeyEvent` fields `code`, `modifiers`, `kind`, `KeyEventKind::Press`, `KeyCode::Char`, `KeyCode::Esc`, `KeyModifiers::CONTROL` | 0.29.0 `event.rs`: `kind` is always set on Windows, so releases arrive there; `poll` returns early when an event is ready |
-| ratatui-core, ratatui-widgets, ratatui-crossterm | 0.1.2, 0.3.2, 0.1.2 | reached through ratatui | as above |
+| ratatui, default features off, `crossterm` | 0.30.2 | as before, plus `Block` titles, `BorderType`, `Shadow`, `Padding`, `Clear`, `Canvas` with `Marker::Braille`, `Flex`, `Buffer::content`, `Buffer::cell_mut`, `style::Color` | research sections 1.1–1.10, with file and line |
+| crossterm, through ratatui only | 0.29.0 | as before, plus `terminal::SetTitle`, `Begin/EndSynchronizedUpdate`, `style::available_color_count`, the `Command` trait | research 3.1, 5.1, 7.2 |
+| tachyonfx, default features off, `std` and `std-duration` | 0.25.2 | `EffectManager::{add_unique_effect, cancel_unique_effect, process_effects, is_running}`, `fx::{coalesce, sweep_in, dissolve, fade_from, hsl_shift_fg, ping_pong, repeating, parallel, sequence}`, `Interpolation`, `Motion`, `CellFilter` | research 2.2 and 7.3; the crate's README and `fx/mod.rs` |
+| tui-big-text | 0.8.10 | `BigText::builder`, `PixelSize::{Full, HalfHeight, Quadrant}`, `lines`, `style`, `centered` | research 2.3 |
 
-Do not add crossterm as a direct dependency. A second crossterm version would
-compile, but its event types would not match the backend's. Any version change to
-these crates is a dependency update with its own review.
+Research 2.1 proved each against our exact graph: one `ratatui-core 0.1.2`, a
+clean build and no advisory. Adding them to this project repeats that proof with
+`cargo tree -d` and the advisory check. Known costs: tui-big-text compiles `time`
+through ratatui-widgets' calendar feature; `compact_str` 0.9 and 0.10 both
+compile; tachyonfx has internal `unsafe`. Each is a line in the S5 or S6 review.
 
 ## 3. Verification matrix
 
 | Item | Decision |
 | --- | --- |
-| Owned projects | package `pomodoro` at the root (application, binary only); the baseline's `xtask` workspace |
-| Toolchain | 1.98.1 from the baseline pin; no separate MSRV row |
-| Feature lanes | none; the package declares no features, so there is no minimal job |
-| Linux, `ubuntu-24.04` | the baseline's full lane: executes every automated row, including the Linux branch of C07 and the release test lane |
-| Windows, `windows-2025` | the baseline's Windows lane: executes every automated row, including the Windows branch of C07, plus the release build |
-| macOS | none; no claim |
-| Compile-only evidence | none claimed |
-| Binary tests | `tests/cli.rs` spawns `CARGO_BIN_EXE_pomodoro` with stdout piped. Piped stdout is not a terminal, which is what makes C09 and C10 testable in CI |
-| Unit tests | readings are offsets from one base instant; no test sleeps; D03–D05 draw into `TestBackend` |
-| Manual checks | M01, M03, M04 on Windows Terminal on the owner's Windows 11 host and on one Linux terminal; run by the owner or a named reviewer; each result becomes a row in the slice's review record |
-| Review-only | M02's single restore path, M05, any `#[expect]`, both `cfg` branches of C07, the lint interactions in section 1 |
-| Advisories | the baseline's advisory commands for the product graph and the `xtask` graph; ratatui brings the product's first real dependency graph |
-| Gate numbers | `cargo xtask gates` output and O1–O7 results at the stop after slice 2 |
-
-C07 builds its argument with `OsStringExt::from_vec` on Unix and
-`OsStringExt::from_wide` with an unpaired surrogate on Windows. Each branch is
-active on its own lane only, so both lanes must be green before C07 counts as covered.
+| Toolchain and lanes | 1.98.1; Linux full lane and Windows lane from the baseline; no features, no MSRV lane, no macOS |
+| Binary tests | `tests/cli.rs`, stdout piped, every child killed at 20 s |
+| Unit tests | readings are offsets from one base instant; screens draw into `TestBackend`; colour rows inspect the buffer after the quantize pass; environment rows build the snapshot directly, never from the real environment |
+| Previews | an ignored test, `preview_screens`, renders named scenes to HTML under `target/preview/` with their colours; a headless browser screenshot of it is the design review of S4 and S5. It is not evidence for any row. |
+| Program output | a pseudo-console capture (as used for M03) shows what the program writes: bell, title, progress; it is research evidence, not a CI test |
+| Manual checks | M01–M05 were recorded in Windows Terminal; M06–M08 by the owner in Windows Terminal, VS Code and a Linux terminal |
+| Review-only | M02, M05, I04's order, any `#[expect]`, both `cfg` branches of C07, the dependency costs in section 2 |
+| Gate numbers | `cargo xtask gates` and O1–O12 at each stop |
 
 ## 4. Implementation slices
 
-Iterate with the baseline's fast check; each slice ends with its full check.
+Iterate with the baseline's fast check; each slice ends with its full check, a
+review in `evidence/`, and hosted CI.
 
-### S1: a bar that counts down
+Done: S1 (a bar that counts down), S2 (the pomodoro cycle) and S3 (the command
+line), covering C01–C11, T01–T11, D01–D05, K01–K03 and M01–M05. Their reviews are
+`evidence/s1-review.md` to `evidence/s3-review.md`.
 
-- Files: the baseline via `cargo init --name pomodoro` and the baseline's `init`;
-  `Cargo.toml` with ratatui as above and the lock resolved at setup; `settings`
-  (defaults only), `timer` (running state only), `view`, `terminal` (quit keys only),
-  `app`, `main`, `tests/cli.rs`.
-- Rows: C01, C09, T01–T04, D01, D02, D04, K01 (quit keys), K02, M01, M02.
-- Failing test first: `progress_stays_within_unit_interval`. With an uncapped ratio,
-  a reading after the end panics inside `Gauge::ratio`. Then `refuses_non_terminal_stdout`,
-  which fails while the binary enters the alternate screen on a pipe.
-- Done when the full check is green and `cargo run` on the owner's host shows a
-  25-minute bar counting down that `q` leaves cleanly (M01, Windows).
+### S4: palette, glyphs and capabilities
 
-### S2: the pomodoro cycle
+- Files: `environment`, `theme`, `glyphs`, `options` (new); `cli` (three flags);
+  `view` (painted background, phase border types, key caps, glyphs); `app` (the
+  quantize pass after each draw); `main` (snapshot at start).
+- Rows: C08 (updated), C12–C15, P01–P08, G01–G03, D03 re-checked.
+- Failing test first: `no_color_keeps_modifiers`, which exposes crossterm's
+  attribute reset if colour is left to it; then `color_depth_follows_environment`.
+- Adds no dependency.
 
-- Files: `timer` (Paused, Ready, phase end, skip, rounds), `terminal` (space, `s`,
-  bell), `view` (state, round, key help), `app` (phase-end bell, command dispatch).
-- Rows: T05–T11, D03, D05, K01 (all keys), K03, M03, M04, M05.
-- Failing test first: `late_reading_ends_only_one_phase`, which exposes a loop that
-  replays missed phases. Then `command_after_phase_end_applies_to_next_phase`, which
-  exposes a space press that pauses a finished phase at zero.
-- Done when the full check is green and hosted CI is green. Then stop for review, as
-  the kickoff says.
+### S5: the showpiece
 
-### S3: the command line
+- Files: `view/clock` (tui-big-text), `view/bar`, `view/dial`, `view/ribbon`,
+  `view/popup`; `view` (three layouts); `timer` (the cycle's phase list).
+- Rows: D04 (widened), D06–D13.
+- Failing test first: `gradient_bar_fills_by_eighths`, then
+  `ready_popup_announces_next_phase`.
+- Then stop for the owner's review of the screenshots before any motion work.
 
-- Files: `cli` (new), `settings` (value types with fallible construction), `main`
-  (exit code 2), `tests/cli.rs`.
-- Rows: C02–C08, C10, C11.
-- Failing test first: `rejects_non_unicode_argument`, which exposes a panic from
-  `std::env::args`. Then `reports_first_wrong_argument`, which exposes a parser that
-  collects every error or reports the last one.
-- Done when every contract row has passing evidence, M01, M03 and M04 are recorded on
-  both terminals, the full check is green and CI is green.
+### S6: motion
+
+- Files: `motion` (new, tachyonfx); `app` (effect events, wake-up interval,
+  synchronized output); `cli`/`options` already carry `--motion`.
+- Rows: E01–E05, with `alert_pulse_is_slow_enough` first.
+
+### S7: terminal integration
+
+- Files: `terminal` (title, progress, clearing on finish); `app` (writing them when
+  their text changes).
+- Rows: I01–I04, then M06–M08 by the owner.
 
 ## 5. Rehearsals and risks
 
 | Change | Files touched | Finding |
 | --- | --- | --- |
-| Rename an upstream field | Not applicable: no external service. The nearest equivalent, renaming a key, touches `src/terminal.rs` (binding and help text) and row K01 | one module; none |
-| Swap the main external service | The nearest equivalent is replacing crossterm with ratatui's termwiz backend, which has the same raw mode, alternate screen and key events. It touches `Cargo.toml` features and `src/terminal.rs`; `view` uses backend-independent widgets | one module. K02 and M03 are re-checked because release events and the bell are backend behaviour |
-| Add a sibling operation, restarting the phase on `r` | `src/timer.rs` and its tests (the transition), `src/terminal.rs` (binding, help text), `src/app.rs` (the dispatch arm, which the exhaustive match on the command enum forces), one contract row | each file changes for its own responsibility; none |
+| Rename an upstream field | not applicable; the nearest, renaming a key, touches `src/terminal.rs` and K01 | one module |
+| Swap the main external service | the nearest are the terminal backend (`src/terminal.rs` and `Cargo.toml`) and the effects library (`src/motion.rs` and `Cargo.toml`); `view` draws plain buffers | one module each |
+| Add a sibling operation, restarting a phase on `r` | `timer` and its tests, `terminal` (binding, help), `app` (the dispatch arm), one contract row | each file for its own responsibility |
 
 | Risk | Owner | Handling |
 | --- | --- | --- |
-| The clock counts sleep on some platforms and not on others | owner, accepted in the decision record | no correction; no row |
-| Being killed by a signal leaves Linux raw mode on | owner, accepted in the decision record | `reset` repairs it; no signal handling |
-| The ratatui and crossterm 0.x API changes on upgrade | owner | the pinned lock; upgrades are reviewed dependency updates |
-| The Windows child process may not receive an unpaired surrogate unchanged | agent, in S3 | if the Windows branch of C07 cannot build such an argument, report it; do not drop the row |
-| The bell is muted or visual on some terminals | owner | M03 records what each checked terminal did |
-| Manual rows need a person at a terminal | owner | S3 does not close until M01, M03 and M04 are recorded |
+| Sleep and the monotonic clock; signals leaving raw mode | owner, accepted | as recorded |
+| 0.x upgrades of ratatui, tachyonfx, tui-big-text | owner | pinned lock; reviewed updates |
+| tachyonfx's internal `unsafe` | owner | dependency review line in the S6 review |
+| Emoji width differs in a terminal with old width tables | owner | the safe set; `--glyphs symbols` as the escape hatch |
+| OSC 9 collides with notification OSC 9 elsewhere | agent | progress only on positive detection (I02, I03) |
+| The title stack is unverified in Windows Terminal | agent | restore by stack where supported; record what M06 shows |
+| A slow terminal drops frames | agent | effects are time-based; frames are area-limited |
 
-Choices the owner may reverse are listed in the decision record. Each maps to rows:
-waiting for space (T06, T11), skip semantics (T08), the 1-to-99 range (C02, C03),
-starting immediately (T01), bar direction (D02), and exit codes (C03–C10).
-
-Status: this plan reports planned verification only; no check listed here has run.
-The one executed step was research. A scratch project outside this repository
-compiled ratatui 0.30.2 with only the crossterm feature. Clippy passed with
-`-D warnings` plus `wildcard_enum_match_arm`, `indexing_slicing` and
-`cast_precision_loss`. Drawing a gauge at 0 × 0, 1 × 1 and 40 × 5 did not panic.
-That ran on Windows with Rust 1.98.1 on 2026-09-24.
+Status: slices 1 to 3 have passed their checks and hosted CI. Slices 4 to 7 are
+planned; none of their checks has run.

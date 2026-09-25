@@ -185,3 +185,22 @@ arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
   Terminal, quiet and about a second late, and never in VS Code. A timed capture put
   the bell 0.16 s after the phase end and 15 ms before the Ready screen, so the delay
   is in the terminal's sound playback, not in pomodoro. Linux is not yet checked.
+
+### SI-13 The plan format has no route for extending a pack after its slices are done (friction)
+
+- **Where:** rust-project-plan's plan-format.md, when the owner asked for the visual
+  overhaul after slice 3.
+- **What happened:** plan-format.md says to keep an existing good plan and amend it
+  rather than reformat it, and caps the decision record at 900 words and the plan at
+  3,000. The decision record was at 803 words, so the overhaul could not be added as
+  an amendment. It had to be rewritten, folding the confirmed "choices made for you"
+  into the description. The plan made room by collapsing the finished slices 1 to 3
+  into one paragraph that points at their reviews. Nothing in the skill says what
+  happens to finished slices, answered open questions or confirmed choices, or where
+  a mid-project research file belongs.
+- **Expected:** a short rule: finished slices shrink to a pointer at their evidence;
+  confirmed choices move out of "choices made for you"; research lives beside the
+  pack and the plan cites it.
+- **Done:** the decision record was rewritten at 864 words and the plan at 2,254,
+  with 23 new contract rows (C12–C15, D06–D13, P01–P08, G01–G03, E01–E05, I01–I04,
+  M06–M08, V09–V11). The research is `docs/research/visual-overhaul.md`.
