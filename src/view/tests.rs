@@ -606,9 +606,11 @@ fn ribbon_shows_the_cycle() -> Result<(), Box<dyn Error>> {
     let base = Instant::now();
     let mut timer = skipped(2, base);
     assert!(!timer.toggle(base));
-    let segments = timer.cycle();
+    let segments: Vec<_> = timer.segments().collect();
     assert_eq!(segments.len(), 8);
-    let widths = super::ribbon::widths(&segments, 67).ok_or("67 cells fit")?;
+    let widths: Vec<u16> = super::ribbon::widths(timer.segments(), 67)
+        .ok_or("67 cells fit")?
+        .collect();
     assert_eq!(widths.iter().sum::<u16>() + 7, 67);
     // 60 cells after the 7 gaps, over a 130-minute cycle.
     for (segment, width) in segments.iter().zip(&widths) {
@@ -626,7 +628,7 @@ fn ribbon_shows_the_cycle() -> Result<(), Box<dyn Error>> {
     assert!(super::ribbon::render(
         &mut buffer,
         area,
-        &segments,
+        timer.segments(),
         timer.position(),
         half
     ));
@@ -649,7 +651,7 @@ fn ribbon_shows_the_cycle() -> Result<(), Box<dyn Error>> {
         base,
     );
     assert!(
-        super::ribbon::widths(&many.cycle(), 60).is_none(),
+        super::ribbon::widths(many.segments(), 60).is_none(),
         "198 phases need more room"
     );
     Ok(())

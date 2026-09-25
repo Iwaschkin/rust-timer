@@ -10,26 +10,28 @@ use ratatui::layout::{Position, Rect};
 
 /// Each segment's width in cells, with one cell between segments, or `None` when
 /// `width` cannot give every segment at least one cell.
-pub(super) fn widths(segments: &[Segment], width: u16) -> Option<Vec<u16>> {
-    let count = u16::try_from(segments.len()).ok()?;
+pub(super) fn widths(
+    segments: impl Iterator<Item = Segment> + Clone,
+    width: u16,
+) -> Option<impl Iterator<Item = u16> + Clone> {
+    let count = u16::try_from(segments.clone().count()).ok()?;
     let available = u64::from(width.checked_sub(count.checked_sub(1)?)?);
     let total: u64 = segments
-        .iter()
+        .clone()
         .map(|segment| segment.length.as_secs())
         .sum();
-    let mut widths = Vec::with_capacity(segments.len());
-    let (mut passed, mut previous_edge) = (0_u64, 0_u64);
-    for segment in segments {
-        passed += segment.length.as_secs();
-        let edge = passed * available / total.max(1);
-        let cells = u16::try_from(edge - previous_edge).ok()?;
-        if cells == 0 {
-            return None;
-        }
-        widths.push(cells);
-        previous_edge = edge;
-    }
-    Some(widths)
+    // Where each segment ends, scaled to the cells available, then the gaps between.
+    let edges = segments.scan(0_u64, move |passed, segment| {
+        *passed += segment.length.as_secs();
+        Some(*passed * available / total.max(1))
+    });
+    let widths = edges.scan(0_u64, |previous, edge| {
+        let cells = u16::try_from(edge - *previous).ok()?;
+        *previous = edge;
+        Some(cells)
+    });
+    let whole = widths.clone().filter(|cells| *cells > 0).count();
+    (whole == usize::from(count)).then_some(widths)
 }
 
 /// Draws the ribbon on the first row of `area`, with the phase at `position`
@@ -37,15 +39,15 @@ pub(super) fn widths(segments: &[Segment], width: u16) -> Option<Vec<u16>> {
 pub(super) fn render(
     buffer: &mut Buffer,
     area: Rect,
-    segments: &[Segment],
+    segments: impl Iterator<Item = Segment> + Clone,
     position: usize,
     progress: Progress,
 ) -> bool {
-    let Some(widths) = widths(segments, area.width) else {
+    let Some(widths) = widths(segments.clone(), area.width) else {
         return false;
     };
     let mut x = area.left();
-    for (index, (segment, cells)) in segments.iter().zip(widths).enumerate() {
+    for (index, (segment, cells)) in segments.zip(widths).enumerate() {
         let accent = theme::accent(segment.phase);
         let lit = progress.scaled(u32::from(cells) * 8);
         for column in 0..cells {
