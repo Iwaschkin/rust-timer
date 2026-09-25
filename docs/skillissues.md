@@ -49,7 +49,9 @@ arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
   slice 2. Both reds were observed with `cargo test --locked`. In slice 2 the same
   rule held back T07's N = 1 case: building settings with N = 1 needs the `--every`
   constructor, which only slice 3's production code reads, and a test-only
-  constructor would be inactive `cfg` code. That case moves to slice 3.
+  constructor would be inactive `cfg` code. That case moves to slice 3. It recurred
+  three times in slice 4: the `--motion` flag, the colour `mix` function and the
+  `VTE_VERSION` field each waited for the slice whose production code reads them.
 
 ### SI-04 Nothing bounds a spawned binary; an interactive one hangs the test (misleads)
 
@@ -204,3 +206,22 @@ arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
 - **Done:** the decision record was rewritten at 864 words and the plan at 2,254,
   with 23 new contract rows (C12–C15, D06–D13, P01–P08, G01–G03, E01–E05, I01–I04,
   M06–M08, V09–V11). The research is `docs/research/visual-overhaul.md`.
+
+### SI-14 No route to review what a terminal UI looks like (friction)
+
+- **Where:** rust-quality-baseline's verification.md, and rust-project-plan's
+  verification matrix, in slices 4 and 5.
+- **What happened:** the baseline's evidence is commands, tests and CI; a visual
+  design has none of those for "does it look right". Tests could check that the dial
+  lights the right quadrant or that no digit keeps the full accent while paused, but
+  not that the bar looked muddy at 29 %, that the drop shadow let a digit show
+  through in a pale grey, or that the paused badge sat on top of the digits. Those
+  three defects were found only by looking.
+- **Expected:** a named route for rendered-output review: render scenes from
+  `TestBackend` buffers to a viewable form, outside the evidence count, and look at
+  them before a slice closes.
+- **Done:** an ignored test, `preview_screens`, writes each scene as HTML (every
+  cell with its colours, in the owner's terminal font) and as plain text under
+  `target/preview/`. Headless Edge screenshots of the HTML were the design review,
+  and the README's screen sample is one of the text renders. The plan records the
+  previews as review aids, not evidence for any row.
