@@ -98,8 +98,11 @@ there is no hosted CI.
   skill asks whether one exists before the kickoff is filled in.
 - **Expected:** the plan's verification matrix to record whether hosted CI exists,
   and the kickoff to say what replaces the CI URL when it does not.
-- **Done:** the reviews record "no remote, so no CI job"; local checks stand in and
-  are labelled local.
+- **Done:** slices 1 and 2 ran on local checks, labelled local. The owner then added
+  a GitHub remote; its first push made `feat/pomodoro` the default branch, and the
+  workflow only runs on pushes to `main` and on pull requests, so nothing ran until
+  `main` was pushed and PR #1 opened. Its first run passed. The kickoff could say
+  that the base branch must exist on the remote and be the default.
 
 ### SI-08 `gates` counts evidence in a directory no document names (misleads)
 
