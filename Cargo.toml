@@ -1,0 +1,66 @@
+[package]
+rust-version = "1.98.1"
+name = "pomodoro"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+
+# The baseline's native lints; the project's guard checks them.
+[lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+unexpected_cfgs = "deny"
+unfulfilled_lint_expectations = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+let_underscore_must_use = "deny"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+missing_errors_doc = "deny"
+missing_panics_doc = "deny"
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_precision_loss = "deny"
+cast_sign_loss = "deny"
+exit = "deny"
+mem_forget = "deny"
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+# Module edges stay visible when every imported name is written out.
+# A fully public `pub use x::*` escapes this lint; that form is a review rule and a `gates` count.
+wildcard_imports = "deny"
+# A reachable `unreachable!` is a panic route, like `panic`/`todo`.
+unreachable = "deny"
+# An index past the end panics past every panic lint; use get, iterators or `if let [a, b]`.
+indexing_slicing = "deny"
+# A wildcard arm silently absorbs the next variant of the project's own enums; list them.
+# At a foreign non-exhaustive enum, an expectation with the reason is the intended answer.
+wildcard_enum_match_arm = "deny"
+# The same rule when the wildcard hides exactly one variant; clippy reports that case separately.
+match_wildcard_for_single_variants = "deny"
+# `.ok()` on a result nobody reads silences unused_must_use and observes nothing.
+unused_result_ok = "deny"
+# `map_err(|_| ...)` drops the cause: carry the error, or the part of it that is safe to keep.
+map_err_ignore = "deny"
+# `Arc::clone(&handle)` says an identity is shared; `handle.clone()` reads like a copy of the data.
+clone_on_ref_ptr = "deny"
+
+[lints.rustdoc]
+broken_intra_doc_links = "deny"
+private_intra_doc_links = "deny"
+invalid_html_tags = "deny"
+
+# An application's release build checks overflow.
+[profile.release]
+overflow-checks = true

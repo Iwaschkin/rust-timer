@@ -1,0 +1,8 @@
+# Only advisories are mandatory in the default profile.
+# Licence/source/banned-dependency policies need actual project decisions.
+[advisories]
+yanked = "deny"
+unmaintained = "all"
+maximum-db-staleness = "P1D"
+unused-ignored-advisory = "deny"
+ignore = []

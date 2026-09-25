@@ -1,0 +1,6 @@
+# Selected candidate validation pin, not an MSRV or a claim of native testing.
+# Review release notes and run the maintenance canaries before accepting a new pin.
+[toolchain]
+channel = "1.98.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]

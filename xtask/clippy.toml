@@ -1,0 +1,10 @@
+# Test failure and compile-time validation are legitimate loud failure paths.
+# These settings do not permit runtime production panic shortcuts.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-unwrap-in-consts = true
+allow-expect-in-consts = true
+allow-dbg-in-tests = false
+
+# MSRV is read from Cargo.toml. Do not duplicate it here.

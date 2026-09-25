@@ -1,0 +1,92 @@
+name: Rust quality
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # a weekly full run: advisories against a fresh database, and the lanes
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux runs the full check, including release-mode tests.
+          - os: ubuntu-24.04
+            minutes: 30
+            check: cargo xtask check
+          # Windows runs everything but the release test lane, then proves the release build.
+          - os: windows-2025
+            minutes: 45
+            check: cargo xtask check --no-release-tests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned compiler and components
+        run: rustup toolchain install 1.98.1 --profile minimal --component clippy --component rustfmt
+      - name: Restore the cargo registry, git checkouts and build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+            xtask/target
+          key: ${{ runner.os }}-rust-1.98.1-${{ hashFiles('Cargo.lock', 'xtask/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-rust-1.98.1-
+      - name: Native configuration, lint, test and documentation checks
+        run: ${{ matrix.check }}
+      - name: Release build
+        if: ${{ runner.os == 'Windows' }}
+        run: cargo build --release --locked
+  # Render a `minimal` job (the native steps with `cargo xtask check --no-default-features`)
+  # only when a product package declares [features]; without features it repeats the work.
+  # Add every rendered job to `needs` of the `quality` job below: a job that is not
+  # listed there can fail while the required check stays green.
+  advisories:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned compiler
+        run: rustup toolchain install 1.98.1 --profile minimal
+      - name: Restore the advisory tool
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: ${{ runner.os }}-cargo-deny-0.20.2
+      - name: Install native advisory tooling
+        # A restored cache already holds the binary; install only when the pinned version is absent.
+        run: cargo deny --version | grep -qx 'cargo-deny 0.20.2' || cargo install cargo-deny --version 0.20.2 --locked --force
+      - name: Product advisories
+        run: cargo deny --workspace --all-features --locked check advisories
+      - name: Tooling advisories
+        run: cargo deny --manifest-path xtask/Cargo.toml --all-features --locked check advisories
+  quality:
+    if: ${{ always() }}
+    needs: [native, advisories]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every declared job
+        env:
+          # A result is success, failure, cancelled or skipped, so rejecting the last
+          # three requires every job in `needs` to have succeeded. `skipped` is in the
+          # list because a job that never ran is not evidence: without it, a job whose
+          # condition turns out false leaves this required check green. A job added to
+          # `needs` is therefore required without another line here, and a deliberately
+          # conditional job needs its own explicit allowance.
+          UNSUCCESSFUL: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: test "$UNSUCCESSFUL" = false
