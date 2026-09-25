@@ -157,5 +157,6 @@ there is no hosted CI.
   established here; the template does not mention the cost at all.
 - **Expected:** a line in asset-application.md or the template about minutes on
   private repositories and the weekly run, so an owner can budget for it.
-- **Done:** slice 3's review records the run as not started; local checks stand in.
-  The run has to be repeated once billing allows.
+- **Done:** the owner made the repository public, where standard runners are free.
+  The run queued for `f05eaf3` then started and passed on every job (run
+  36092083660, 108 s). Slice 3's review records both runs.
