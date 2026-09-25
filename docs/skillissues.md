@@ -62,3 +62,37 @@ there is no hosted CI.
 - **Done:** tests/cli.rs polls the child and kills it after 20 s. Negative check: with
   the terminal check disabled, the test failed in 22 s with "was still running after
   20s and was killed", no process was left, and the restored source passed.
+
+### SI-05 The review record has no stated home (friction)
+
+- **Where:** quality-review-template.md and the kickoff template, at the end of slice 1.
+- **What happened:** the kickoff says a slice's evidence is "a review of at most 40
+  lines, the commit hash and the CI run URL", and the template says logs and captured
+  output stay out of the repository. Neither says whether the review itself is
+  committed, or where. It also has to name the commit it reviews, so it cannot sit in
+  that commit.
+- **Expected:** one sentence giving the path and the order: slice commit, then the
+  review in a following commit.
+- **Done:** `docs/reviews/s1.md`, committed after the slice commit it names.
+
+### SI-06 A plan check that names files fails until the files exist (note)
+
+- **Where:** rust-project-plan's ownership checks, met in slice 1.
+- **What happened:** O7, `grep -ln 'ratatui' src/settings.rs src/cli.rs src/timer.rs`,
+  printed `grep: src/cli.rs: No such file or directory` until slice 3 creates the file.
+  plan-format.md says a check prints nothing while its rule holds, but not from which
+  slice.
+- **Expected:** checks written over directories, or with `grep -s`, so they hold from
+  the first slice; or a stated first slice for each.
+- **Done:** recorded the error in the slice 1 review; the check is correct from slice 3.
+
+### SI-07 The kickoff assumes a remote and hosted CI (friction)
+
+- **Where:** kickoff-template.md, after slice 1.
+- **What happened:** the kickoff says to push the branch, open a pull request and use
+  the CI run URL as evidence from slice 2 on. rust-timer has no remote, and neither
+  skill asks whether one exists before the kickoff is filled in.
+- **Expected:** the plan's verification matrix to record whether hosted CI exists,
+  and the kickoff to say what replaces the CI URL when it does not.
+- **Done:** the reviews record "no remote, so no CI job"; local checks stand in and
+  are labelled local.
