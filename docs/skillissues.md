@@ -9,8 +9,8 @@ led me to expect, the evidence, and what I did about it. Severity is one of: blo
 (the documented route fails), misleads (the text leads to a wrong action), friction
 (extra work, right result), or note.
 
-Host: Windows 11, Git Bash, Rust 1.98.1, cargo-deny 0.20.2, git 2.55. No remote, so
-there is no hosted CI.
+Host: Windows 11, Git Bash, Rust 1.98.1, cargo-deny 0.20.2, git 2.55. A GitHub remote
+arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
 
 ## Entries
 
