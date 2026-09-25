@@ -4,6 +4,8 @@
 //! file and the dependency's features.
 
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::terminal::{BeginSynchronizedUpdate, EndSynchronizedUpdate};
+use ratatui::crossterm::{ExecutableCommand, QueueableCommand};
 use ratatui::{DefaultTerminal, Frame};
 use std::error::Error;
 use std::fmt;
@@ -21,8 +23,79 @@ pub(crate) enum Command {
     Quit,
 }
 
-/// The keys, as the screen lists them.
-pub(crate) const KEY_HELP: &str = "space start/pause · s skip · q quit";
+/// The keys and what they do, as the screen and the usage text list them.
+pub(crate) const KEYS: [(&str, &str); 3] = [("space", "start/pause"), ("s", "skip"), ("q", "quit")];
+
+/// The keys on one line, for the usage text.
+pub(crate) fn key_help() -> String {
+    KEYS.iter()
+        .map(|(key, action)| format!("{key} {action}"))
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+/// Whether the console takes 24-bit colour, as crossterm judges it. On Windows
+/// that is whether virtual-terminal output could be enabled.
+pub(crate) fn console_truecolor() -> bool {
+    ratatui::crossterm::style::available_color_count() == u16::MAX
+}
+
+/// What the taskbar button and tab show, in terminals that support OSC 9;4.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Taskbar {
+    /// No indicator.
+    Clear,
+    /// A running phase, with its percentage done.
+    Running(u8),
+    /// A paused phase, with its percentage done.
+    Paused(u8),
+    /// A phase waiting for a key: animated, to draw the eye.
+    Waiting,
+}
+
+/// The OSC 9;4 sequence for `taskbar`: `ESC ] 9 ; 4 ; state ; value BEL`, where
+/// state 1 is normal, 4 paused (warning), 3 indeterminate and 0 cleared.
+pub(crate) fn progress_sequence(taskbar: Taskbar) -> String {
+    let (state, value) = match taskbar {
+        Taskbar::Clear => (0, 0),
+        Taskbar::Running(percent) => (1, percent),
+        Taskbar::Paused(percent) => (4, percent),
+        Taskbar::Waiting => (3, 0),
+    };
+    format!("\x1b]9;4;{state};{value}\x07")
+}
+
+/// The OSC 0 sequence that sets the window and tab title.
+pub(crate) fn title_sequence(title: &str) -> String {
+    format!("\x1b]0;{title}\x07")
+}
+
+/// Saves the current title on xterm's title stack.
+const PUSH_TITLE: &str = "\x1b[22;0t";
+
+/// Restores the title saved on xterm's title stack.
+const POP_TITLE: &str = "\x1b[23;0t";
+
+/// The title left behind where the terminal keeps no title stack.
+const PARTING_TITLE: &str = "pomodoro";
+
+/// What leaving writes before raw mode ends: the progress cleared, where it was
+/// shown; a neutral title; then the saved title restored, where the terminal keeps
+/// a title stack.
+///
+/// The neutral title is not empty, because Windows' pseudo-console ignores an empty
+/// title and would keep, and later send, the last countdown written. Without a
+/// stack, as there, the terminal is left showing the program's name rather than a
+/// stopped clock.
+pub(crate) fn farewell(taskbar: bool) -> String {
+    let mut sequences = String::new();
+    if taskbar {
+        sequences.push_str(&progress_sequence(Taskbar::Clear));
+    }
+    sequences.push_str(&title_sequence(PARTING_TITLE));
+    sequences.push_str(POP_TITLE);
+    sequences
+}
 
 /// The command a terminal event asks for, if any. Only key presses count: Windows
 /// also reports releases, which would otherwise act twice.
@@ -61,6 +134,8 @@ pub(crate) enum Step {
     ReadInput,
     /// Ringing the terminal bell.
     Bell,
+    /// Setting the window title or the taskbar progress.
+    Signal,
     /// Leaving raw mode and the alternate screen.
     Restore,
 }
@@ -72,6 +147,7 @@ impl fmt::Display for Step {
             Self::Draw => "draw the screen",
             Self::ReadInput => "read input",
             Self::Bell => "ring the bell",
+            Self::Signal => "update the window title or taskbar",
             Self::Restore => "restore the terminal",
         })
     }
@@ -164,6 +240,7 @@ fn after(run: TerminalError, restore: io::Result<()>) -> RunFailure {
 pub(crate) struct Session {
     terminal: DefaultTerminal,
     finished: bool,
+    taskbar: bool,
 }
 
 impl Session {
@@ -174,23 +251,62 @@ impl Session {
     /// Fails before changing anything when standard output is not a terminal, and
     /// when the terminal cannot be entered; whatever was already changed is restored
     /// first.
-    pub(crate) fn enter() -> Result<Self, RunFailure> {
+    ///
+    /// The window title is saved on the terminal's title stack. `taskbar` says
+    /// whether the terminal shows OSC 9;4 progress; without it none is written.
+    pub(crate) fn enter(taskbar: bool) -> Result<Self, RunFailure> {
         if !io::stdout().is_terminal() {
             return Err(RunFailure::Run(TerminalError::NotATerminal));
         }
-        match ratatui::try_init() {
-            Ok(terminal) => Ok(Self {
-                terminal,
-                finished: false,
-            }),
-            Err(source) => Err(after(
-                TerminalError::Failed {
-                    step: Step::Enter,
-                    source,
-                },
-                ratatui::try_restore(),
-            )),
+        let entered = |source| TerminalError::Failed {
+            step: Step::Enter,
+            source,
+        };
+        let terminal = match ratatui::try_init() {
+            Ok(terminal) => terminal,
+            Err(source) => return Err(after(entered(source), ratatui::try_restore())),
+        };
+        let mut session = Self {
+            terminal,
+            finished: false,
+            taskbar,
+        };
+        if let Err(source) = session.write(PUSH_TITLE) {
+            session.finished = true;
+            return Err(after(entered(source), ratatui::try_restore()));
         }
+        Ok(session)
+    }
+
+    /// Writes `sequence` straight to the terminal and flushes it.
+    fn write(&mut self, sequence: &str) -> io::Result<()> {
+        let backend = self.terminal.backend_mut();
+        backend
+            .write_all(sequence.as_bytes())
+            .and_then(|()| backend.flush())
+    }
+
+    /// Sets the window and tab title.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the title cannot be written to the terminal.
+    pub(crate) fn set_title(&mut self, title: &str) -> Result<(), TerminalError> {
+        self.write(&title_sequence(title))
+            .map_err(TerminalError::at(Step::Signal))
+    }
+
+    /// Shows `taskbar` as OSC 9;4 progress, in a terminal that supports it.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the progress cannot be written to the terminal.
+    pub(crate) fn set_taskbar(&mut self, taskbar: Taskbar) -> Result<(), TerminalError> {
+        if !self.taskbar {
+            return Ok(());
+        }
+        self.write(&progress_sequence(taskbar))
+            .map_err(TerminalError::at(Step::Signal))
     }
 
     /// Draws one frame.
@@ -202,9 +318,23 @@ impl Session {
         &mut self,
         render: impl FnOnce(&mut Frame<'_>),
     ) -> Result<(), TerminalError> {
-        self.terminal
-            .draw(render)
-            .map(|_frame| ())
+        // Synchronized output: the terminal shows the whole frame at once, so an
+        // effect never tears. A terminal that lacks it ignores both markers. The end
+        // marker is written even when drawing fails, so updates are never held back.
+        let began = self
+            .terminal
+            .backend_mut()
+            .queue(BeginSynchronizedUpdate)
+            .map(|_backend| ());
+        let drawn = self.terminal.draw(render).map(|_frame| ());
+        let ended = self
+            .terminal
+            .backend_mut()
+            .execute(EndSynchronizedUpdate)
+            .map(|_backend| ());
+        began
+            .and(drawn)
+            .and(ended)
             .map_err(TerminalError::at(Step::Draw))
     }
 
@@ -230,21 +360,23 @@ impl Session {
     ///
     /// Fails when the bell cannot be written to the terminal.
     pub(crate) fn ring_bell(&mut self) -> Result<(), TerminalError> {
-        let backend = self.terminal.backend_mut();
-        backend
-            .write_all(b"\x07")
-            .and_then(|()| backend.flush())
-            .map_err(TerminalError::at(Step::Bell))
+        self.write("\x07").map_err(TerminalError::at(Step::Bell))
     }
 
-    /// Restores the terminal, reporting `run`'s outcome together with the restore's.
+    /// Clears the progress and restores the title, then the terminal, reporting
+    /// `run`'s outcome together with the restore's.
+    ///
+    /// A farewell that cannot be written is a failed restore: the terminal is left
+    /// showing this program's title or progress. Raw mode is left either way.
     ///
     /// # Errors
     ///
     /// Returns every failure, the run's first.
     pub(crate) fn finish(mut self, run: Result<(), TerminalError>) -> Result<(), RunFailure> {
         self.finished = true;
-        combine(run, ratatui::try_restore())
+        let said = self.write(&farewell(self.taskbar));
+        let restored = ratatui::try_restore();
+        combine(run, said.and(restored))
     }
 }
 

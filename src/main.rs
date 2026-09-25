@@ -2,12 +2,18 @@
 
 mod app;
 mod cli;
+mod environment;
+mod glyphs;
+mod motion;
+mod options;
 mod settings;
 mod terminal;
+mod theme;
 mod timer;
 mod view;
 
 use cli::Invocation;
+use environment::Environment;
 use std::error::Error;
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -28,10 +34,10 @@ fn report(error: &dyn Error) -> String {
 }
 
 fn main() -> ExitCode {
-    let settings = match cli::parse(std::env::args_os().skip(1)) {
-        Ok(Invocation::Run(settings)) => settings,
+    let options = match cli::parse(std::env::args_os().skip(1)) {
+        Ok(Invocation::Run(options)) => options,
         Ok(Invocation::Help) => {
-            let usage = cli::usage(terminal::KEY_HELP);
+            let usage = cli::usage(&terminal::key_help());
             return match io::stdout().lock().write_all(usage.as_bytes()) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
@@ -45,7 +51,18 @@ fn main() -> ExitCode {
             return ExitCode::from(USAGE);
         }
     };
-    match app::run(settings) {
+    let environment = Environment::from_lookup(
+        |name| std::env::var_os(name),
+        cfg!(windows),
+        terminal::console_truecolor(),
+    );
+    let appearance = options.appearance(&environment);
+    match app::run(
+        options.settings,
+        appearance,
+        options.motion,
+        environment.shows_progress(),
+    ) {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => {
             for error in failure.errors() {

@@ -117,3 +117,18 @@ fn restore_failure_follows_run_failure() {
         ["could not read input", "could not restore the terminal"]
     );
 }
+
+#[test]
+fn finish_clears_progress_and_title() {
+    assert_eq!(
+        super::farewell(true),
+        "\x1b]9;4;0;0\x07\x1b]0;pomodoro\x07\x1b[23;0t",
+        "progress cleared, a neutral title, then the saved title restored"
+    );
+    assert_eq!(
+        super::farewell(false),
+        "\x1b]0;pomodoro\x07\x1b[23;0t",
+        "no progress sequence where none was shown"
+    );
+    assert_eq!(super::title_sequence("🍅 25:00"), "\x1b]0;🍅 25:00\x07");
+}

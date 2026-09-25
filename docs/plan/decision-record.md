@@ -8,96 +8,92 @@ reported.
 
 ## What we are building
 
-The repository is empty today, so no existing code constrains these choices.
-We are building a terminal pomodoro timer, run as `pomodoro`.
-It shows the current phase and a progress bar that fills as the phase runs.
-The bar carries the remaining time as minutes and seconds.
-Work phases alternate with short breaks.
-Every fourth work phase is followed by a long break instead.
-When a phase ends, the terminal bell rings once.
-The next phase then waits until you press space.[^1]
+`pomodoro` is a terminal pomodoro timer.
+Work phases alternate with short breaks, and every fourth work phase is followed by a long break.
+When a phase ends, the bell rings once and the next phase waits until you press space.
+Space starts, pauses and resumes; `s` skips; `q`, Esc and Ctrl-C quit.
+Four flags set the lengths and the interval, each a whole number from 1 to 99.[^1]
+Slices 1 to 3 built this, and it passed on Windows.
 
-Space starts, pauses and resumes the timer.
-`s` skips to the next phase.
-`q`, Esc and Ctrl-C quit.[^2]
+## The visual overhaul
 
-Four flags change the cycle when the program starts.
-`--work`, `--short` and `--long` set phase lengths in whole minutes.
-`--every` sets how many work phases come before a long break.
-Each value is a whole number from 1 to 99.
-The defaults are 25, 5, 15 and 4.[^3]
-A mistyped flag stops the program with a one-line reason before the screen changes.
+On 2026-09-25 you asked for a visual overhaul as a technology demonstrator.
+It should show what ratatui can do, not stop at what is sensible.
+The phase-end alert must be visible as well as audible, because a terminal bell is easy to miss.[^2]
+
+- The whole screen gets a designed dark palette, painted by the program.
+- The time left is drawn in large block digits, in the colour of the phase.
+- A round dial drawn in braille dots fills as the phase runs.
+- A progress bar fills smoothly in eighths of a cell, with a colour ramp.
+- A ribbon shows the whole cycle, with the current phase marked.
+- When a phase ends, a popup with a shadow names the next phase, and its border pulses slowly.
+- Pausing dims the clock and shows a Paused badge.
+- Effects animate the start, phase changes and the alert.
+- The window title shows the time left.
+- In terminals that support it, the taskbar and tab show progress.
+- Emoji mark the phases: 🍅 for work, ☕ for a short break, 🌙 for a long break.
+
+The layout adapts to the window size, and a very small window still works.[^3]
+
+## Colour, emoji and motion everywhere
+
+Terminals differ, so the program adapts.
+It detects how many colours the terminal shows and converts the palette to match.
+`NO_COLOR` turns colour off, as the no-color.org convention asks.
+Terminals that cannot show emoji get plain symbols instead.
+Three new flags override the detection: `--color`, `--glyphs` and `--motion`.
+`--motion off` turns every animation off.
+Colour never carries meaning alone: each phase also has its own name, emoji and border style.
+Every text colour meets the WCAG contrast level for normal text.
+The alert pulse stays well below three flashes a second.[^4]
 
 ## What we are not building
 
-- No saved history, statistics or streaks.
-- No configuration file and no environment variables.
-- No desktop notifications or sound files; the terminal bell is the only alert.
-- No mouse support, colour themes or task names.
-- No published crate and no promises to library users.
-- No macOS support promise; it may work there, but nobody checks it.
-
-Deferred: a key that restarts the current phase, and lengths in seconds for quick demos.
+- No saved history, statistics or configuration file.
+- No desktop notifications or sound files.
+- No mouse support, and no choice of themes: there is one designed palette.
+- No published crate.
+- No macOS promise.
 
 ## Technology choices
 
-- Rust 1.98.1 with edition 2024, the compiler the quality baseline pins.
-- ratatui 0.30.2 draws the screen, with only its crossterm backend enabled.
-- crossterm 0.29.0 comes through ratatui rather than as its own dependency.
-  That keeps exactly one crossterm version in the build.
-- The standard library reads the command line.
-  Four flags do not justify a parsing crate.
-- One thread and no async runtime.
-  The program wakes at least four times a second to redraw.
-- One package holding a binary and no library.
-  Nothing outside the program uses its types.
+- Rust 1.98.1, edition 2024, as the quality baseline pins.
+- ratatui 0.30.2 with only its crossterm backend.
+- tachyonfx 0.25.2 for effects, and tui-big-text 0.8.10 for the large digits.
+- Both were checked against our exact ratatui: one copy of its core, a clean build and no advisory.
+- The standard library reads the command line and the environment.
+- One thread, and no async runtime.
 
 ## Policies
 
 - The quality baseline's lints, checks and evidence rules apply unchanged.
-- Remaining time comes from a monotonic clock, not from counting redraws.
-  A slow or late redraw never shortens or lengthens a phase.
-- The terminal is restored on every quit and every error.
+- Remaining time comes from the clock, not from counting redraws.
+- On every exit the terminal is restored, taskbar progress is cleared, and the title
+  is restored where the terminal keeps a title stack; elsewhere it reads `pomodoro`.
+- The screen redraws at least four times a second, and about thirty times a second while an effect runs.
 - Windows and Linux are the supported platforms, and CI runs the tests on both.
-- Terminal restore, the bell and resizing are checked by hand, because CI has no terminal.
+- Appearance is checked by hand in Windows Terminal, VS Code and a Linux terminal.
 
-## Choices made for you, easy to reverse
+## Decided for you, easy to reverse
 
 1. The next phase waits for space instead of starting by itself.
-   Reason: an unattended timer would keep cycling and count pomodoros nobody worked.
-2. Skipping moves on exactly as if the phase had ended, but without the bell.
-   A skipped work phase still counts towards the long break.
+2. A skipped work phase still counts towards the long break.
 3. Lengths are whole minutes from 1 to 99.
-   The limit keeps the display to two minute digits.
-   The shortest phase therefore takes one minute.
-4. The timer runs as soon as the program opens.
-5. The bar fills as time passes rather than emptying.
-6. Argument mistakes exit with code 2, runtime failures with 1, and quitting with 0.
-7. The command is `pomodoro`, although the repository is `rust-timer`.
-
-## Open questions
-
-None blocks the first slice.
-Choices 1, 2 and 4 take effect in the second slice.
-Choices 3 and 6 take effect in the third slice.
-Change any of them before its slice starts and the contract row changes with it.
+4. Argument mistakes exit with 2, runtime failures with 1, and quitting with 0.
+5. The palette is "Tomato Night": tomato for work, mint for short breaks, lavender for long breaks, amber for the alert.
+6. The taskbar shows a paused state while paused, and an animated state while a phase waits.
 
 ## Risks you own
 
-- Laptop sleep: the standard clock counts sleep time on some platforms and not on others.
-  After waking, a phase may have ended or may carry on where it stopped.
-  We accept either outcome and do not correct for it.
-- Some terminals mute the bell or flash the window instead.
-  We check it by hand on Windows Terminal and one Linux terminal.
-- ratatui and crossterm are below version 1.0.
-  Their next minor release can change what the code calls.
-  Upgrading them is a deliberate change with its own review, never a routine refresh.
-- If another program kills `pomodoro`, a Linux terminal can stay in raw mode.
-  Typing `reset` repairs it.
-  Handling that case needs a signal-handling dependency, which we leave out.
-- Hand checks need a person at a real terminal.
-  You, or a reviewer you name, run them before the last slice closes.
+- The standard clock may or may not count time the computer spends asleep.
+- If another program kills `pomodoro`, a Linux terminal can stay in raw mode; `reset` repairs it.
+- ratatui, tachyonfx and tui-big-text are below version 1.0, so upgrades are deliberate reviews.
+- tachyonfx contains `unsafe` code of its own; our lints cover only our code.
+- VS Code shows the title and taskbar progress only if its tab title settings include them.
+- Some terminals show emoji at a different width, and the program cannot detect that.
+- Hand checks need a person at each terminal before the last slice closes.
 
-[^1]: Behaviour contract rows T06, T07, T11 and M03.
-[^2]: Rows K01 to K03 and M01.
-[^3]: Rows C01 to C08.
+[^1]: Behaviour contract rows C01 to C11, T01 to T11 and K01 to K03.
+[^2]: Rows D12, E02, I01 and I02.
+[^3]: Rows D06 to D11 and D04.
+[^4]: Rows P01 to P08, G01 to G03, C12 to C15 and E02 to E04.

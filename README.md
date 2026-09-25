@@ -4,12 +4,30 @@ A pomodoro timer for the terminal. It runs a cycle of work phases and breaks, an
 shows the current phase as a progress bar with the time left.
 
 ```text
-Work · Running
-Round 2 of 4
-┌──────────────────────────────────────────────────────┐
-│████████████████        17:42                         │
-└──────────────────────────────────────────────────────┘
-space start/pause · s skip · q quit
+ 🍅 pomodoro   🍅⚪⚪⚪ Round 2 of 4
+┏ 🍅 Work ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ⏳ Running ┓
+┃                                                                              ┃
+┃                                                                              ┃
+┃                                                                              ┃
+┃                                                                              ┃
+┃            ⣀⣤⣴⣶⣶⣶⣶⣦⣤⣀                                                        ┃
+┃         ⢀⣴⣾⠿⠋⠉    ⠉⠙⠿⣷⣦⡀          ██    ██████             ███   ████        ┃
+┃        ⢠⣾⡟⠁          ⠈⢻⣷⡄        ███    ██  ██    ██      ████  ██  ██       ┃
+┃       ⢀⣿⡏              ⢹⣿⡀        ██        ██    ██     ██ ██      ██       ┃
+┃       ⢸⣿      29%       ⣿⡇        ██       ██           ██  ██    ███        ┃
+┃       ⢸⣿     Work       ⣿⡇        ██      ██            ███████  ██          ┃
+┃       ⠈⣿⣇              ⣸⠉⠁        ██      ██      ██        ██  ██  ██       ┃
+┃        ⠘⢿⣧⡀          ⢀⣼⡿⠃       ██████    ██      ██       ████ ██████       ┃
+┃         ⠈⠻⢿⣶⣄⣀    ⣀⣠⣶⡿⠟⠁                                                     ┃
+┃            ⠉⠛⠻⠿⠿⠿⠿⠟⠛⠉                                                        ┃
+┃                                                                              ┃
+┃  █████████████████████▌                                                      ┃
+┃                                07:18 of 25:00                                ┃
+┃                                                                              ┃
+┃  ████████████ ███ ███▊                                                       ┃
+┃                                                                              ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+                     space  start/pause   s  skip   q  quit
 ```
 
 ## How it works
@@ -19,11 +37,24 @@ space start/pause · s skip · q quit
   With the defaults that's 25 minutes of work, 5-minute short breaks and a 15-minute
   long break.
 - **The first phase** starts running as soon as the program opens.
-- **When a phase ends,** the terminal bell rings once. The next phase is loaded at
-  full length and waits, marked Ready, until you press space. Nothing moves on
-  while you are away.
-- **The bar** fills as the phase runs. The label on it is the time left as
-  minutes and seconds, rounded up, so it reads `00:00` only when the phase is over.
+- **When a phase ends,** the terminal bell rings once and a popup names the next
+  phase over the dimmed screen. That phase is loaded at full length and waits until
+  you press space. Nothing moves on while you are away.
+- **The time left** is shown in large block digits as minutes and seconds, rounded
+  up, so it reads `00:00` only when the phase is over. A dial of braille dots and a
+  bar that fills in eighths of a cell show how much of the phase has passed.
+- **Motion:** the screen assembles itself when the program opens, a phase that
+  starts coalesces into view, and the popup drops in and its amber frame pulses
+  slowly, about once every two seconds, until you press a key. `--motion off`
+  turns every animation off.
+- **Outside the window:** the tab and window title show the phase and the time
+  left, or which phase is ready. In Windows Terminal, VS Code, kitty and GNOME
+  Terminal (VTE 0.80 or later), the taskbar button and tab also show progress:
+  normal while running, paused while paused, and animated while a phase waits.
+  VS Code shows these only if its tab title settings include `${sequence}` and
+  `${progress}`. On exit the progress is cleared, and the title comes back where
+  the terminal keeps a title stack; elsewhere, such as Windows Terminal, it reads
+  `pomodoro`.
 - **Timing** comes from the system's monotonic clock, not from counting screen
   updates. The screen redraws at least four times a second, and a slow redraw
   never changes the length of a phase.
@@ -32,8 +63,9 @@ space start/pause · s skip · q quit
 
 - Windows or Linux. macOS is not tested.
 - An interactive terminal: Windows Terminal on Windows, or any terminal emulator
-  on Linux. At 40 columns by 6 rows or more, the whole screen fits; a smaller
-  window still works, with parts cut off.
+  on Linux. The full layout, with the dial, needs 80 columns by 24 rows; from 48 by
+  16 the digits get smaller and the dial goes; below that the time is plain text. A
+  tiny window still works, with parts cut off.
 - To build it: [rustup](https://rustup.rs). The repository pins Rust 1.98.1 in
   `rust-toolchain.toml`, and rustup installs that version the first time you run
   `cargo` here.
@@ -75,10 +107,20 @@ pomodoro --help               # the options, their ranges and defaults, and the 
 | `--short MIN` | the length of a short break, in minutes | 1 to 99 | 5 |
 | `--long MIN` | the length of a long break, in minutes | 1 to 99 | 15 |
 | `--every N` | how many work phases come before a long break | 1 to 99 | 4 |
+| `--color WHEN` | the colours to use | `auto`, `truecolor`, `256`, `16`, `none` | `auto` |
+| `--glyphs SET` | the pictures beside the text | `auto`, `emoji`, `symbols`, `ascii` | `auto` |
+| `--motion ON` | whether the screen animates | `on`, `off` | `on` |
 | `-h`, `--help` | print the usage and exit | | |
 
-Each option takes a whole number, given as the next argument (`--work 50`, not
-`--work=50`), and can appear once. `--help` wins wherever it appears.
+Each option's value is the next argument (`--work 50`, not `--work=50`), and each
+option can appear once. `--help` wins wherever it appears.
+
+With `auto`, pomodoro picks the colours and pictures from the terminal it runs in.
+It uses 24-bit colour in Windows Terminal, VS Code and any terminal that sets
+`COLORTERM=truecolor`, and falls back to 256 or 16 colours elsewhere. Setting
+`NO_COLOR` to any non-empty value turns colour off, and `--color` overrides it.
+Emoji are used everywhere except the old Windows console, which gets symbols, and
+the Linux console, which gets plain ASCII.
 
 ### Keys
 
@@ -92,9 +134,17 @@ Keys work with or without Shift. Any other key does nothing.
 
 ### The screen
 
-From the top: the phase and its state (`Work`, `Short break` or `Long break`;
-`Running`, `Paused` or `Ready`), the round (a break shows the round it follows),
-the progress bar with the time left, and the keys.
+- **The header** shows a tomato for each work phase done in this cycle, a circle
+  for each still to come, and the round (a break shows the round it follows).
+- **The panel** is framed in the phase's colour: tomato red with a thick border for
+  work, mint with a rounded border for a short break, lavender with a double border
+  for a long break. Its title gives the phase and its state (`Running`, `Paused` or
+  `Ready`).
+- **Inside**, from the top: a Paused badge when paused, the dial and the large
+  digits (dimmed while paused), the bar with the time passed out of the phase
+  length, and the ribbon: one segment per phase of the cycle, as wide as the phase
+  is long, filled as the cycle goes on.
+- **The keys** are along the bottom.
 
 Quitting ends the run. Nothing is saved, and the next run starts again at round 1.
 
@@ -146,8 +196,12 @@ the message is printed.
 - **The time looks wrong after the computer slept**: whether the clock counts time
   asleep depends on the platform. After waking, the phase may have ended or may
   carry on where it stopped.
-- **Odd characters in place of the `·` or the bar**: use a terminal with UTF-8 and
-  a font that has box-drawing characters, such as Windows Terminal.
+- **Odd characters in place of the `·`, the bar or the emoji**: use a terminal with
+  UTF-8 and a font that has box-drawing characters, such as Windows Terminal. If
+  emoji look misaligned, `--glyphs symbols` swaps them for one-cell symbols.
+- **Animations are distracting or slow**: `--motion off` draws every screen still.
+- **Colours look wrong**: `--color 256` or `--color 16` forces a smaller palette,
+  and `--color none` uses the terminal's own colours.
 
 ## Development
 
