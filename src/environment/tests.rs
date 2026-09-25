@@ -31,3 +31,28 @@ fn legacy_console_is_windows_without_a_terminal_program() {
     assert!(!terminal(&[("TERM_PROGRAM", "vscode")], true, true).legacy_windows_console());
     assert!(!terminal(&[], false, false).legacy_windows_console());
 }
+
+#[test]
+fn progress_only_on_known_terminals() {
+    let known = [
+        terminal(&[("WT_SESSION", "x")], true, true),
+        terminal(&[("TERM_PROGRAM", "vscode")], false, false),
+        terminal(&[("TERM", "xterm-kitty")], false, false),
+        terminal(&[("VTE_VERSION", "8000")], false, false),
+        terminal(&[("VTE_VERSION", "8203")], false, false),
+    ];
+    for environment in known {
+        assert!(environment.shows_progress(), "{environment:?}");
+    }
+    let unknown = [
+        terminal(&[], true, true),
+        terminal(&[("TERM", "xterm-256color")], false, false),
+        terminal(&[("VTE_VERSION", "7800")], false, false),
+        terminal(&[("VTE_VERSION", "new")], false, false),
+        terminal(&[("TERM_PROGRAM", "iTerm.app")], false, false),
+        terminal(&[("TERM_PROGRAM", "WezTerm")], false, false),
+    ];
+    for environment in unknown {
+        assert!(!environment.shows_progress(), "{environment:?}");
+    }
+}

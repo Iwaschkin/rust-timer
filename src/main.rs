@@ -57,7 +57,12 @@ fn main() -> ExitCode {
         terminal::console_truecolor(),
     );
     let appearance = options.appearance(&environment);
-    match app::run(options.settings, appearance, options.motion) {
+    match app::run(
+        options.settings,
+        appearance,
+        options.motion,
+        environment.shows_progress(),
+    ) {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => {
             for error in failure.errors() {

@@ -104,7 +104,7 @@ receives.
 | I01 | running, paused or ready | the window title is the phase glyph, `MM:SS` and the phase name while it counts, or the bell glyph, the phase name and "ready" while it waits; either ends with a dash and `pomodoro`; written only when its text changes | `title_follows_timer` |
 | I02 | a terminal known to show OSC 9;4 progress: `WT_SESSION` set, `TERM_PROGRAM=vscode`, `TERM=xterm-kitty`, or `VTE_VERSION` at least 8000 | state 1 with the percentage while running, 4 while paused, 3 while ready; written when it changes and at least every 10 s | `progress_follows_state` |
 | I03 | any other terminal | no OSC 9;4 is written | `progress_only_on_known_terminals` |
-| I04 | every exit path | progress is cleared with state 0 and the saved title restored, before raw mode ends | `finish_clears_progress_and_title`, and review of the finish path |
+| I04 | every exit path | before raw mode ends: progress cleared with state 0, the title set to `pomodoro`, then the saved title restored where the terminal keeps a title stack; so no stopped countdown is left in the title | `finish_clears_progress_and_title`, and review of the finish path |
 
 ## Keys
 

@@ -68,7 +68,8 @@ The alert pulse stays well below three flashes a second.[^4]
 
 - The quality baseline's lints, checks and evidence rules apply unchanged.
 - Remaining time comes from the clock, not from counting redraws.
-- The terminal, its title and its taskbar progress are restored on every exit.
+- On every exit the terminal is restored, taskbar progress is cleared, and the title
+  is restored where the terminal keeps a title stack; elsewhere it reads `pomodoro`.
 - The screen redraws at least four times a second, and about thirty times a second while an effect runs.
 - Windows and Linux are the supported platforms, and CI runs the tests on both.
 - Appearance is checked by hand in Windows Terminal, VS Code and a Linux terminal.

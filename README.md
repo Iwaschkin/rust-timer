@@ -47,6 +47,14 @@ shows the current phase as a progress bar with the time left.
   starts coalesces into view, and the popup drops in and its amber frame pulses
   slowly, about once every two seconds, until you press a key. `--motion off`
   turns every animation off.
+- **Outside the window:** the tab and window title show the phase and the time
+  left, or which phase is ready. In Windows Terminal, VS Code, kitty and GNOME
+  Terminal (VTE 0.80 or later), the taskbar button and tab also show progress:
+  normal while running, paused while paused, and animated while a phase waits.
+  VS Code shows these only if its tab title settings include `${sequence}` and
+  `${progress}`. On exit the progress is cleared, and the title comes back where
+  the terminal keeps a title stack; elsewhere, such as Windows Terminal, it reads
+  `pomodoro`.
 - **Timing** comes from the system's monotonic clock, not from counting screen
   updates. The screen redraws at least four times a second, and a slow redraw
   never changes the length of a phase.

@@ -13,6 +13,7 @@ pub(crate) struct Environment {
     colorterm: String,
     windows_terminal: bool,
     term_program: String,
+    vte_version: u32,
     windows: bool,
     console_truecolor: bool,
 }
@@ -37,6 +38,7 @@ impl Environment {
             colorterm: text("COLORTERM"),
             windows_terminal: lookup("WT_SESSION").is_some(),
             term_program: text("TERM_PROGRAM"),
+            vte_version: text("VTE_VERSION").parse().unwrap_or(0),
             windows,
             console_truecolor,
         }
@@ -75,6 +77,16 @@ impl Environment {
     /// `TERM` names a 256-colour terminal.
     pub(crate) fn announces_256(&self) -> bool {
         self.term.contains("256")
+    }
+
+    /// A terminal known to show OSC 9;4 progress: Windows Terminal, VS Code, kitty,
+    /// or VTE 0.80 and later. Elsewhere the sequence could collide with the OSC 9
+    /// notification some terminals implement, so it is only sent on these.
+    pub(crate) fn shows_progress(&self) -> bool {
+        self.windows_terminal
+            || self.term_program == "vscode"
+            || self.term == "xterm-kitty"
+            || self.vte_version >= 8000
     }
 
     /// Windows with neither Windows Terminal nor another terminal program: the

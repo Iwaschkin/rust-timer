@@ -79,6 +79,25 @@ pub(crate) fn render(
     }
 }
 
+/// The window and tab title for `timer` at `now` (I01): the phase glyph, the time
+/// left and the phase while it counts; the bell and the phase while it waits.
+pub(crate) fn window_title(timer: &Timer, now: Instant, glyphs: GlyphTier) -> String {
+    let phase = timer.phase();
+    let label = phase_label(phase);
+    let left = remaining_label(timer.remaining(now));
+    match timer.state() {
+        State::Running => format!(
+            "{} {left} {label} — pomodoro",
+            glyphs.glyph(phase_glyph(phase))
+        ),
+        State::Paused => format!(
+            "{} {left} {label} paused — pomodoro",
+            glyphs.glyph(Glyph::Paused)
+        ),
+        State::Ready => format!("{} {label} ready — pomodoro", glyphs.glyph(Glyph::Ready)),
+    }
+}
+
 fn header_line(timer: &Timer, glyphs: GlyphTier) -> Paragraph<'static> {
     let (round, rounds) = (timer.round(), timer.rounds());
     let mut spans = vec![

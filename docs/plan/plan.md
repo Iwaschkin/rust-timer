@@ -92,7 +92,7 @@ grep -rnwE '99|25' src | grep -v -e 'src/settings.rs' -e '/tests.rs'
 # O3
 grep -rnE 'KeyCode|KeyModifiers|KeyEventKind' src | grep -v -e 'src/terminal.rs' -e '/tests.rs'
 # O4
-grep -rnE 'try_init|try_restore|event::(poll|read)|is_terminal|x07|x1b' src | grep -v 'src/terminal.rs'
+grep -rnE 'try_init|try_restore|event::(poll|read)|is_terminal|x07|x1b' src | grep -v -e 'src/terminal.rs' -e '/tests.rs'
 # O5
 grep -rnE 'Gauge|Layout::|Canvas|"(Work|Short break|Long break|Running|Paused|Ready)"' src | grep -v -e 'src/view' -e '/tests.rs'
 # O6
