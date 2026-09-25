@@ -237,11 +237,10 @@ fn render_panel(
     let progress = timer.progress(now);
     bar::render(frame.buffer_mut(), bar, progress, accent);
     frame.render_widget(bar_label(timer, now), label);
-    let segments = timer.cycle();
     if !ribbon::render(
         frame.buffer_mut(),
         ribbon,
-        &segments,
+        timer.segments(),
         timer.position(),
         progress,
     ) {
