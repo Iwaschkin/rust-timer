@@ -153,10 +153,11 @@ arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
 - **Where:** the CI template, on PR #2.
 - **What happened:** every job of run 36091436371 failed in 2 to 5 s with "The job
   was not started because recent account payments have failed or your spending
-  limit needs to be increased." The repository is private. On private repositories
-  GitHub bills Windows minutes at twice the Linux rate, and the template also runs
-  the whole workflow weekly. Whether this workflow used up the allowance is not
-  established here; the template does not mention the cost at all.
+  limit needs to be increased." The repository is private. On a private repository
+  every job spends the plan's included Actions minutes, and beyond those GitHub's
+  billing page charges $0.010 a minute on Windows against $0.006 on Linux; the
+  template also runs the whole workflow weekly. Whether this workflow used up the
+  allowance is not established here; the template does not mention the cost at all.
 - **Expected:** a line in asset-application.md or the template about minutes on
   private repositories and the weekly run, so an owner can budget for it.
 - **Done:** the owner made the repository public, where standard runners are free.
@@ -222,6 +223,27 @@ arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
   them before a slice closes.
 - **Done:** an ignored test, `preview_screens`, writes each scene as HTML (every
   cell with its colours, in the owner's terminal font) and as plain text under
-  `target/preview/`. Headless Edge screenshots of the HTML were the design review,
-  and the README's screen sample is one of the text renders. The plan records the
-  previews as review aids, not evidence for any row.
+  `target/preview/`. Headless Edge screenshots of the HTML were the design review.
+  The README first showed a text render, which misaligned on GitHub, whose fonts
+  do not give braille, block elements and emoji whole cells; it now shows a
+  screenshot of the HTML render. The plan records the previews as review aids, not
+  evidence for any row.
+
+### SI-15 A stacked branch was rebased; the reviews name commits main does not contain (misleads)
+
+- **Where:** the kickoff's branch instructions and the review template, when PRs #2
+  and #3 merged.
+- **What happened:** the overhaul branch started from the slice 3 branch while PR #2
+  was open, so PR #3 was stacked on it. When PR #2 merged, GitHub moved PR #3's base
+  to main, and three seconds later the branch was force-pushed with its eleven
+  commits rebased onto the merge commit, each with a new hash. PR #3 then merged
+  with a merge commit. The commits the S4 to S7 reviews name, `303cfb8`, `c613231`,
+  `5b65158` and `a16c84f`, are not on main.
+- **Expected:** the kickoff or the project's AGENTS.md to say that work goes on a
+  feature branch from the current main and merges through a pull request with a
+  merge commit, and that later work starts on a new branch from the updated main,
+  never on a merged branch or stacked on an unmerged one.
+- **Done:** the owner set that workflow, and rust-skills 0.5.0-rc.6 adds it to the
+  AGENTS.md template and the kickoff. Each rebased commit has the same tree as the
+  one it replaced, so the reviews' results hold for main's `0a6260b`, `bf09b4f`,
+  `432bba8` and `6c7f740`, in that order.
