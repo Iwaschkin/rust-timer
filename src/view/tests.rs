@@ -359,7 +359,7 @@ fn draw_moving(
 fn html(buffer: &Buffer) -> String {
     let mut page = String::from(
         "<!doctype html><meta charset=\"utf-8\"><body style=\"margin:0;background:#000\">\
-         <div style=\"font:18px/1.25 'JetBrains Mono','Segoe UI Emoji',monospace;padding:0\">",
+         <div style=\"font:20px/1.25 'JetBrains Mono','Segoe UI Emoji',monospace;padding:0\">",
     );
     let width = usize::from(buffer.area.width.max(1));
     for row in buffer.content.chunks(width) {
@@ -378,10 +378,24 @@ fn html(buffer: &Buffer) -> String {
             } else {
                 "normal"
             };
+            let (foreground, background) = (css(cell.fg, "#e6e9f2"), css(cell.bg, "#0c0c0c"));
+            // Terminals draw block elements as rectangles, not font glyphs, whose
+            // edges leave hairlines between cells; paint them the same way.
+            let (symbol, background) = match left_eighths(symbol) {
+                Some(eighths) => {
+                    let edge = f32::from(eighths) * 12.5;
+                    (
+                        " ",
+                        format!(
+                            "linear-gradient(to right,{foreground} {edge}%,{background} {edge}%)"
+                        ),
+                    )
+                }
+                None => (symbol, background),
+            };
             page.push_str(&format!(
-                "<span style=\"display:inline-block;width:{cells}ch;white-space:pre;color:{};background:{};font-weight:{weight}\">{}</span>",
-                css(cell.fg, "#e6e9f2"),
-                css(cell.bg, "#0c0c0c"),
+                "<span style=\"display:inline-block;width:{cells}ch;white-space:pre;\
+                 color:{foreground};background:{background};font-weight:{weight}\">{}</span>",
                 escape(symbol),
             ));
         }
@@ -389,6 +403,21 @@ fn html(buffer: &Buffer) -> String {
     }
     page.push_str("</div></body>");
     page
+}
+
+/// How many eighths of the cell, from the left, a block element fills.
+fn left_eighths(symbol: &str) -> Option<u8> {
+    match symbol {
+        "▏" => Some(1),
+        "▎" => Some(2),
+        "▍" => Some(3),
+        "▌" => Some(4),
+        "▋" => Some(5),
+        "▊" => Some(6),
+        "▉" => Some(7),
+        "█" => Some(8),
+        _ => None,
+    }
 }
 
 fn unicode_cells(symbol: &str) -> usize {

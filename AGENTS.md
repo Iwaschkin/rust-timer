@@ -27,7 +27,10 @@ O1 to O12 each print nothing while their rule holds. Terminal restore, the bell 
 resizing (contract rows M01, M03, M04) need a person at a real terminal on Windows
 and on Linux; record each result in the slice review under `evidence/`. Tests
 that run the binary bound it and kill it at the limit, because an interactive
-binary hangs instead of failing.
+binary hangs instead of failing. The README image, `docs/images/work-running.png`,
+is `target/preview/work-running-readme-truecolor.html` from `cargo test --locked
+preview_screens -- --ignored`, screenshotted in a browser at 960 by 600 pixels and
+twice that resolution; a text copy of the screen misaligns in GitHub's fonts.
 
 Keep invariant-bearing representation private and every construction/mutation
 route valid. Identify resource owners, preserve error causes and perform

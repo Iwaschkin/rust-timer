@@ -3,32 +3,7 @@
 A pomodoro timer for the terminal. It runs a cycle of work phases and breaks, and
 shows the current phase as a progress bar with the time left.
 
-```text
- 🍅 pomodoro   🍅⚪⚪⚪ Round 2 of 4
-┏ 🍅 Work ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ⏳ Running ┓
-┃                                                                              ┃
-┃                                                                              ┃
-┃                                                                              ┃
-┃                                                                              ┃
-┃            ⣀⣤⣴⣶⣶⣶⣶⣦⣤⣀                                                        ┃
-┃         ⢀⣴⣾⠿⠋⠉    ⠉⠙⠿⣷⣦⡀          ██    ██████             ███   ████        ┃
-┃        ⢠⣾⡟⠁          ⠈⢻⣷⡄        ███    ██  ██    ██      ████  ██  ██       ┃
-┃       ⢀⣿⡏              ⢹⣿⡀        ██        ██    ██     ██ ██      ██       ┃
-┃       ⢸⣿      29%       ⣿⡇        ██       ██           ██  ██    ███        ┃
-┃       ⢸⣿     Work       ⣿⡇        ██      ██            ███████  ██          ┃
-┃       ⠈⣿⣇              ⣸⠉⠁        ██      ██      ██        ██  ██  ██       ┃
-┃        ⠘⢿⣧⡀          ⢀⣼⡿⠃       ██████    ██      ██       ████ ██████       ┃
-┃         ⠈⠻⢿⣶⣄⣀    ⣀⣠⣶⡿⠟⠁                                                     ┃
-┃            ⠉⠛⠻⠿⠿⠿⠿⠟⠛⠉                                                        ┃
-┃                                                                              ┃
-┃  █████████████████████▌                                                      ┃
-┃                                07:18 of 25:00                                ┃
-┃                                                                              ┃
-┃  ████████████ ███ ███▊                                                       ┃
-┃                                                                              ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-                     space  start/pause   s  skip   q  quit
-```
+![pomodoro in a terminal 80 columns wide and 24 rows high, 7 minutes 18 seconds into a 25-minute work phase: a braille dial at 29 percent, 17:42 left in large block digits, a progress bar, a ribbon of the whole cycle and the key help](docs/images/work-running.png)
 
 ## How it works
 
