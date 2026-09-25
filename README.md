@@ -134,7 +134,8 @@ the message is printed.
     bell icon instead.
   - Windows Terminal plays a sound by default (the profile's `bellStyle` is
     `"audible"`). If it's silent, check that the profile doesn't change `bellStyle`
-    and that System sounds isn't muted in the Windows volume mixer. `"all"` also
+    and that System sounds isn't muted in the Windows volume mixer. If it's too
+    quiet, point the profile's `bellSound` at a louder audio file. `"all"` also
     flashes the taskbar.
   - To test a terminal on its own, run `[Console]::Write([char]7)` in PowerShell,
     or `printf '\a'` on Linux.

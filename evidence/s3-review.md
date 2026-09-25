@@ -29,8 +29,8 @@
 ## Open limits (at most 3)
 
 - Windows CI skips release-mode tests and builds the release binary instead; only Linux ran them.
-- M03: first silent in VS Code's terminal and Windows Terminal, then reported working by the owner; which terminal, and what changed, is not recorded. A ConPTY capture shows one bell at the phase end.
-- M01 and M04 were validated by the owner on 2026-09-25; the terminal used is not recorded.
+- Windows Terminal: M01, M03 and M04 pass (owner, 2026-09-25); the bell is quiet and heard about 1 s after a bell pomodoro sends 0.16 s after the phase end. VS Code's terminal stays silent by default.
+- Linux terminal: M01, M03 and M04 not run.
 
 Semantic review and hosted results are separate lines above; a passing command does not
 certify the review, and a local pass does not certify another platform.
