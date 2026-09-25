@@ -1,6 +1,7 @@
 use super::Phase::{LongBreak, ShortBreak, Work};
 use super::{Phase, State, Timer};
 use crate::settings::Settings;
+use std::error::Error;
 use std::time::{Duration, Instant};
 
 const WORK: Duration = Duration::from_secs(25 * 60);
@@ -107,15 +108,28 @@ fn phase_end_reported_once() {
     assert!(!timer.tick(base + WORK + 5 * HOUR));
 }
 
-#[test]
-fn cycle_follows_long_break_interval() {
+/// The phases and rounds a timer passes through, starting with its first.
+fn cycle(settings: Settings, phases: usize) -> Vec<(Phase, u8)> {
     let mut now = Instant::now();
-    let mut timer = Timer::start(Settings::default(), now);
+    let mut timer = Timer::start(settings, now);
     let mut seen = vec![(timer.phase(), timer.round())];
-    for _ in 0..8 {
+    for _ in 0..phases {
         now = finish_phase(&mut timer, now);
         seen.push((timer.phase(), timer.round()));
     }
+    seen
+}
+
+#[test]
+fn cycle_follows_long_break_interval() -> Result<(), Box<dyn Error>> {
+    let every_one = Settings {
+        every: "1".parse()?,
+        ..Settings::default()
+    };
+    let expected = [(Work, 1), (LongBreak, 1), (Work, 1), (LongBreak, 1)];
+    assert_eq!(cycle(every_one, 3), expected);
+
+    let seen = cycle(Settings::default(), 8);
     let expected = [
         (Work, 1),
         (ShortBreak, 1),
@@ -128,6 +142,7 @@ fn cycle_follows_long_break_interval() {
         (Work, 1),
     ];
     assert_eq!(seen, expected);
+    Ok(())
 }
 
 #[test]
