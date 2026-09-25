@@ -181,5 +181,6 @@ arrived after slice 2; hosted CI evidence starts there (SI-07, SI-11).
   terminals use, for 65 s with `--work 1`. It captured "Work · Running" becoming
   "Short break · Ready" and exactly one standalone bell at that point; a PowerShell
   control that writes a bell gave one standalone bell the same way. The README now
-  names the settings that make the bell audible. Windows Terminal defaults to an
+  names the settings that make the bell audible. The owner then reported the bell
+  working; the terminal and the change are not recorded. Windows Terminal defaults to an
   audible bell, and why it was silent here is not established.
