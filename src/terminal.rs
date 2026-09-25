@@ -10,7 +10,7 @@ use ratatui::{DefaultTerminal, Frame};
 use std::error::Error;
 use std::fmt;
 use std::io::{self, IsTerminal, Write};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// What a key press asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -286,22 +286,76 @@ impl Session {
             .and_then(|()| backend.flush())
     }
 
+    /// Clears the progress and restores the title, then the terminal, reporting
+    /// `run`'s outcome together with the restore's.
+    ///
+    /// A farewell that cannot be written is a failed restore: the terminal is left
+    /// showing this program's title or progress. Raw mode is left either way.
+    ///
+    /// # Errors
+    ///
+    /// Returns every failure, the run's first.
+    pub(crate) fn finish(mut self, run: Result<(), TerminalError>) -> Result<(), RunFailure> {
+        self.finished = true;
+        let said = self.write(&farewell(self.taskbar));
+        let restored = ratatui::try_restore();
+        combine(run, said.and(restored))
+    }
+}
+
+/// What the run loop needs from outside it: the clock, the keys and the terminal.
+/// [`Session`] is the live host; a test drives the loop through a scripted one.
+pub(crate) trait Host {
+    /// The time now.
+    fn now(&self) -> Instant;
+
+    /// Waits up to `timeout` for an event and returns the command it asks for.
+    ///
+    /// # Errors
+    ///
+    /// Fails when events cannot be read.
+    fn next_command(&mut self, timeout: Duration) -> Result<Option<Command>, TerminalError>;
+
+    /// Draws one frame.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the frame cannot be written to the terminal.
+    fn draw(&mut self, render: impl FnOnce(&mut Frame<'_>)) -> Result<(), TerminalError>;
+
+    /// Rings the terminal bell once.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the bell cannot be written to the terminal.
+    fn ring_bell(&mut self) -> Result<(), TerminalError>;
+
     /// Sets the window and tab title.
     ///
     /// # Errors
     ///
     /// Fails when the title cannot be written to the terminal.
-    pub(crate) fn set_title(&mut self, title: &str) -> Result<(), TerminalError> {
-        self.write(&title_sequence(title))
-            .map_err(TerminalError::at(Step::Signal))
-    }
+    fn set_title(&mut self, title: &str) -> Result<(), TerminalError>;
 
     /// Shows `taskbar` as OSC 9;4 progress, in a terminal that supports it.
     ///
     /// # Errors
     ///
     /// Fails when the progress cannot be written to the terminal.
-    pub(crate) fn set_taskbar(&mut self, taskbar: Taskbar) -> Result<(), TerminalError> {
+    fn set_taskbar(&mut self, taskbar: Taskbar) -> Result<(), TerminalError>;
+}
+
+impl Host for Session {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+
+    fn set_title(&mut self, title: &str) -> Result<(), TerminalError> {
+        self.write(&title_sequence(title))
+            .map_err(TerminalError::at(Step::Signal))
+    }
+
+    fn set_taskbar(&mut self, taskbar: Taskbar) -> Result<(), TerminalError> {
         if !self.taskbar {
             return Ok(());
         }
@@ -309,15 +363,7 @@ impl Session {
             .map_err(TerminalError::at(Step::Signal))
     }
 
-    /// Draws one frame.
-    ///
-    /// # Errors
-    ///
-    /// Fails when the frame cannot be written to the terminal.
-    pub(crate) fn draw(
-        &mut self,
-        render: impl FnOnce(&mut Frame<'_>),
-    ) -> Result<(), TerminalError> {
+    fn draw(&mut self, render: impl FnOnce(&mut Frame<'_>)) -> Result<(), TerminalError> {
         // Synchronized output: the terminal shows the whole frame at once, so an
         // effect never tears. A terminal that lacks it ignores both markers. The end
         // marker is written even when drawing fails, so updates are never held back.
@@ -338,15 +384,7 @@ impl Session {
             .map_err(TerminalError::at(Step::Draw))
     }
 
-    /// Waits up to `timeout` for an event and returns the command it asks for.
-    ///
-    /// # Errors
-    ///
-    /// Fails when events cannot be read.
-    pub(crate) fn next_command(
-        &mut self,
-        timeout: Duration,
-    ) -> Result<Option<Command>, TerminalError> {
+    fn next_command(&mut self, timeout: Duration) -> Result<Option<Command>, TerminalError> {
         if !event::poll(timeout).map_err(TerminalError::at(Step::ReadInput))? {
             return Ok(None);
         }
@@ -354,29 +392,8 @@ impl Session {
         Ok(command(&event))
     }
 
-    /// Rings the terminal bell once.
-    ///
-    /// # Errors
-    ///
-    /// Fails when the bell cannot be written to the terminal.
-    pub(crate) fn ring_bell(&mut self) -> Result<(), TerminalError> {
+    fn ring_bell(&mut self) -> Result<(), TerminalError> {
         self.write("\x07").map_err(TerminalError::at(Step::Bell))
-    }
-
-    /// Clears the progress and restores the title, then the terminal, reporting
-    /// `run`'s outcome together with the restore's.
-    ///
-    /// A farewell that cannot be written is a failed restore: the terminal is left
-    /// showing this program's title or progress. Raw mode is left either way.
-    ///
-    /// # Errors
-    ///
-    /// Returns every failure, the run's first.
-    pub(crate) fn finish(mut self, run: Result<(), TerminalError>) -> Result<(), RunFailure> {
-        self.finished = true;
-        let said = self.write(&farewell(self.taskbar));
-        let restored = ratatui::try_restore();
-        combine(run, said.and(restored))
     }
 }
 

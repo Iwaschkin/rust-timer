@@ -120,12 +120,13 @@ receives.
 | --- | --- | --- | --- |
 | M01 | quitting with `q`, Esc or Ctrl-C | normal screen back, cursor visible, typed characters echo again; exit 0 | manual check on Windows Terminal and one Linux terminal |
 | M02 | a terminal read or write failure while running | the terminal is restored first; then one line on stderr naming the failed step, followed by its cause; exit 1 | `run_error_names_step_then_cause`, and review: every return from the run loop passes one restore |
-| M03 | a phase ends | the terminal bell rings once | manual check, same terminals as M01 |
+| M03 | a phase ends | the terminal sounds the one bell pomodoro writes (M09) | manual check, same terminals as M01, recording the terminal's bell setting |
 | M04 | the window is resized while running | the next frame fills the new size | manual check, same terminals as M01 |
 | M05 | restoring the terminal fails | its error is reported on stderr after any run error; exit 1 | review of the session's finish path |
 | M06 | the demonstrator in Windows Terminal | colours, emoji, block digits, dial, effects, title and taskbar progress look as designed | manual check by the owner |
 | M07 | the demonstrator in VS Code's terminal | the same, with emoji aligned; the title and progress only if the tab title settings include them | manual check by the owner |
 | M08 | the demonstrator in a Linux terminal | the same as M06, as far as that terminal supports | manual check by the owner |
+| M09 | a running phase reaches its end, including after a pause longer than the phase | the loop writes exactly one bell, at the phase end, and the next phase waits; paused time does not count | `loop_rings_one_bell_at_phase_end` |
 
 ## Value distinctions
 
