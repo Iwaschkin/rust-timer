@@ -61,7 +61,8 @@ The alert pulse stays well below three flashes a second.[^4]
 - ratatui 0.30.2 with only its crossterm backend.
 - tachyonfx 0.25.2 for effects, and tui-big-text 0.8.10 for the large digits.
 - Both were checked against our exact ratatui: one copy of its core, a clean build and no advisory.
-- The standard library reads the command line and the environment.
+- clap 4.6.7 reads the command line and writes the help and the argument errors.
+- The standard library reads the environment.
 - One thread, and no async runtime.
 
 ## Policies

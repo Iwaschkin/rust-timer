@@ -33,8 +33,9 @@ fn pomodoro<A: AsRef<OsStr>>(arguments: &[A]) -> io::Result<Output> {
     child.wait_with_output()
 }
 
-/// Runs with `arguments` and requires a usage error: exit 2, nothing on stdout, and
-/// one line on stderr that contains every one of `mentions`.
+/// Runs with `arguments` and requires a usage error, as clap reports one: exit 2,
+/// nothing on stdout, and stderr opening with an `error:` line that contains every
+/// one of `mentions`. Returns stderr.
 fn usage_error<A: AsRef<OsStr>>(arguments: &[A], mentions: &[&str]) -> io::Result<String> {
     let shown: Vec<_> = arguments.iter().map(AsRef::as_ref).collect();
     let output = pomodoro(arguments)?;
@@ -45,7 +46,8 @@ fn usage_error<A: AsRef<OsStr>>(arguments: &[A], mentions: &[&str]) -> io::Resul
         "{shown:?}: stdout {:?}",
         output.stdout
     );
-    assert_eq!(stderr.lines().count(), 1, "{shown:?}: {stderr}");
+    let first = stderr.lines().next().unwrap_or_default();
+    assert!(first.starts_with("error: "), "{shown:?}: {stderr}");
     for mention in mentions {
         assert!(
             stderr.contains(mention),
@@ -77,7 +79,7 @@ fn rejects_out_of_range_or_non_numeric() -> io::Result<()> {
         ["--work", " 5"],
     ];
     for [flag, value] in cases {
-        let quoted = format!("{value:?}");
+        let quoted = format!("'{value}'");
         usage_error(&[flag, value], &[flag, &quoted, "1 to 99"])?;
     }
     Ok(())
@@ -85,16 +87,22 @@ fn rejects_out_of_range_or_non_numeric() -> io::Result<()> {
 
 #[test]
 fn rejects_missing_value() -> io::Result<()> {
-    usage_error(&["--work"], &["--work", "value"])?;
-    usage_error(&["--short", "5", "--every"], &["--every", "value"])?;
+    usage_error(&["--work"], &["--work", "value is required"])?;
+    usage_error(
+        &["--short", "5", "--every"],
+        &["--every", "value is required"],
+    )?;
     Ok(())
 }
 
 #[test]
 fn rejects_unknown_argument() -> io::Result<()> {
-    usage_error(&["--wrok", "5"], &["\"--wrok\""])?;
-    usage_error(&["--work=5"], &["\"--work=5\""])?;
-    usage_error(&["5"], &["\"5\""])?;
+    let stderr = usage_error(&["--wrok", "5"], &["unexpected argument '--wrok'"])?;
+    assert!(
+        stderr.contains("'--work'"),
+        "the near miss is named: {stderr}"
+    );
+    usage_error(&["5"], &["unexpected argument '5'"])?;
     Ok(())
 }
 
@@ -102,15 +110,18 @@ fn rejects_unknown_argument() -> io::Result<()> {
 fn rejects_repeated_flag() -> io::Result<()> {
     usage_error(
         &["--work", "10", "--work", "20"],
-        &["--work", "more than once"],
+        &["--work", "cannot be used multiple times"],
     )?;
     Ok(())
 }
 
 #[test]
 fn rejects_non_unicode_argument() -> io::Result<()> {
-    usage_error(&[OsString::from("--work"), not_unicode()], &["Unicode"])?;
-    usage_error(&[not_unicode()], &["Unicode"])?;
+    usage_error(
+        &[OsString::from("--work"), not_unicode()],
+        &["invalid UTF-8"],
+    )?;
+    usage_error(&[not_unicode()], &["unexpected argument"])?;
     Ok(())
 }
 
@@ -130,7 +141,7 @@ fn not_unicode() -> OsString {
 
 #[test]
 fn help_prints_usage() -> io::Result<()> {
-    for arguments in [&["--help"][..], &["-h"], &["--work", "0", "--help"]] {
+    for arguments in [&["--help"][..], &["-h"], &["--help", "--work", "0"]] {
         let output = pomodoro(arguments)?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert_eq!(output.status.code(), Some(0), "{arguments:?}");
@@ -145,16 +156,17 @@ fn help_prints_usage() -> io::Result<()> {
             "--long",
             "--every",
             "1 to 99",
-            "default 25",
-            "default 5",
-            "default 15",
-            "default 4",
+            "[default: 25]",
+            "[default: 5]",
+            "[default: 15]",
+            "[default: 4]",
             "--color",
             "--glyphs",
             "--motion",
             "truecolor",
             "emoji",
-            "default auto",
+            "[default: auto]",
+            "[default: on]",
             "space",
         ] {
             assert!(stdout.contains(expected), "{expected:?} in\n{stdout}");
@@ -171,9 +183,13 @@ fn argument_errors_precede_terminal_check() -> io::Result<()> {
 }
 
 #[test]
-fn reports_first_wrong_argument() -> io::Result<()> {
-    let stderr = usage_error(&["--work", "0", "--wrok", "5"], &["--work", "\"0\""])?;
-    assert!(!stderr.contains("wrok"), "{stderr}");
+fn stops_at_one_argument_error() -> io::Result<()> {
+    let stderr = usage_error(&["--work", "0", "--wrok", "5"], &[])?;
+    let errors = stderr
+        .lines()
+        .filter(|line| line.starts_with("error: "))
+        .count();
+    assert_eq!(errors, 1, "{stderr}");
     Ok(())
 }
 
@@ -181,15 +197,12 @@ fn reports_first_wrong_argument() -> io::Result<()> {
 fn rejects_unknown_choice() -> io::Result<()> {
     usage_error(
         &["--color", "8"],
-        &["--color", "\"8\"", "auto, truecolor, 256, 16 or none"],
+        &["--color", "'8'", "auto, truecolor, 256, 16, none"],
     )?;
     usage_error(
         &["--glyphs", "fancy"],
-        &["--glyphs", "\"fancy\"", "auto, emoji, symbols or ascii"],
+        &["--glyphs", "'fancy'", "auto, emoji, symbols, ascii"],
     )?;
-    usage_error(
-        &["--motion", "maybe"],
-        &["--motion", "\"maybe\"", "on or off"],
-    )?;
+    usage_error(&["--motion", "maybe"], &["--motion", "'maybe'", "on, off"])?;
     Ok(())
 }

@@ -21,7 +21,7 @@ every child it spawns.
 | --- | --- | --- |
 | `settings` | phase lengths and interval, their range, defaults and parsing | std |
 | `options` | everything the command line chooses: the settings, the colour and glyph choices (`auto` or a fixed tier) and motion on or off | `settings`, `theme`, `glyphs` |
-| `cli` | the argument grammar, usage text, usage errors | `options` |
+| `cli` | the flags and their choices, declared for clap, which writes the usage text and argument errors | `options`, clap |
 | `environment` | one snapshot of the environment variables that decide colour, glyphs and progress support; which terminal this is | std |
 | `theme` | the palette (every RGB value), colour tiers and their detection, the per-frame quantize pass, the contrast maths | ratatui style and buffer, `environment` |
 | `glyphs` | glyph roles, the three tier tables, tier detection | `environment` |
@@ -63,6 +63,8 @@ RGB mid-flight, so quantizing last is what keeps P04 to P06 true.
 - In tier none, every colour becomes `Reset` before drawing; crossterm's own
   NO_COLOR path would write `ESC[;m` and drop bold (research 3.1).
 - Only the safe emoji set of research 4.4 is used; G02 tests it.
+- clap reads a leading `-` as a flag: the numbers set `allow_negative_numbers`, so
+  `-1` fails its range check instead of being an unknown flag.
 
 ### Ownership checks
 
@@ -80,6 +82,7 @@ RGB mid-flight, so quantizing last is what keeps P04 to P06 true.
 | Contract P01–P08 | RGB colour values | `src/theme.rs` | O10 |
 | Contract P01, G01, I02 | environment variable names | `src/environment.rs` | O11 |
 | Contract G01–G03 | emoji | `src/glyphs.rs` | O12 |
+| Technology choice: clap | `clap::`, `use clap` | `src/cli.rs` | O13 |
 
 Each command below must print nothing. Run them from the repository root in a POSIX
 shell.
@@ -109,6 +112,8 @@ grep -rnE 'from_u32|Color::Rgb' src | grep -v -e 'src/theme.rs' -e '/tests.rs'
 grep -rnE 'NO_COLOR|COLORTERM|WT_SESSION|TERM_PROGRAM|VTE_VERSION' src | grep -v -e 'src/environment.rs' -e '/tests.rs'
 # O12
 grep -rn '🍅\|☕\|🌙\|🔔' src | grep -v -e 'src/glyphs.rs' -e '/tests.rs'
+# O13
+grep -rnE 'clap::|use clap' src | grep -v -e 'src/cli.rs' -e '/tests.rs'
 ~~~
 
 A hit is a prompt to look, not proof of a defect.
@@ -171,41 +176,23 @@ compile; tachyonfx has internal `unsafe`. Each is a line in the S5 or S6 review.
 Iterate with the baseline's fast check; each slice ends with its full check, a
 review in `evidence/`, and hosted CI.
 
-Done: S1 (a bar that counts down), S2 (the pomodoro cycle) and S3 (the command
-line), covering C01–C11, T01–T11, D01–D05, K01–K03 and M01–M05. Their reviews are
-`evidence/s1-review.md` to `evidence/s3-review.md`.
+Done: S1 (a bar that counts down), S2 (the pomodoro cycle), S3 (the command line),
+S4 (palette, glyphs and capabilities), S5 (the showpiece), S6 (motion) and S7
+(terminal integration). Their reviews are `evidence/s1-review.md` to
+`evidence/s7-review.md`; M08 and the Linux runs of M01, M03 and M04 are still open.
 
-### S4: palette, glyphs and capabilities
+### S9: a parser crate
 
-- Files: `environment`, `theme`, `glyphs`, `options` (new); `cli` (three flags);
-  `view` (painted background, phase border types, key caps, glyphs); `app` (the
-  quantize pass after each draw); `main` (snapshot at start).
-- Rows: C08 (updated), C12, C13, C15 (for `--color` and `--glyphs`), P01–P08,
-  G01–G03, D03 re-checked. `--motion` waits for S6, where something reads it.
-- Failing test first: `no_color_keeps_modifiers`, which exposes crossterm's
-  attribute reset if colour is left to it; then `color_depth_follows_environment`.
-- Adds no dependency.
-
-### S5: the showpiece
-
-- Files: `view/clock` (tui-big-text), `view/bar`, `view/dial`, `view/ribbon`,
-  `view/popup`; `view` (three layouts); `timer` (the cycle's phase list).
-- Rows: D04 (widened), D06–D13.
-- Failing test first: `gradient_bar_fills_by_eighths`, then
-  `ready_popup_announces_next_phase`.
-- Then stop for the owner's review of the screenshots before any motion work.
-
-### S6: motion
-
-- Files: `motion` (new, tachyonfx); `cli`, `options` (`--motion`); `app` (effect events, wake-up interval,
-  synchronized output).
-- Rows: C14, E01–E05, with `alert_pulse_is_slow_enough` first.
-
-### S7: terminal integration
-
-- Files: `terminal` (title, progress, clearing on finish); `app` (writing them when
-  their text changes).
-- Rows: I01–I04, then M06–M08 by the owner.
+- From an external review, and the rust-skills rule that followed: a maintained
+  crate for a solved problem. clap 4.6.7, with its derive, replaces the 9 KB
+  hand-written parser; the lengths keep their own range check, which clap calls.
+- Files: `cli` (the flags declared for clap), `main` (clap prints help or the
+  error), `settings` (a length shows its number, for clap's defaults).
+- Rows: C02 to C08, C11 and C15 now state what clap guarantees. `--work=50` is
+  accepted; errors are clap's, over several lines; help after an invalid argument
+  is not reached; of two wrong arguments, clap reports one.
+- Failing tests first: the old binary tests failed against clap on one-line
+  errors and on `--work=5`; each row was rewritten before its test.
 
 ## 5. Rehearsals and risks
 
@@ -225,5 +212,4 @@ line), covering C01–C11, T01–T11, D01–D05, K01–K03 and M01–M05. Their 
 | The title stack is unverified in Windows Terminal | agent | restore by stack where supported; record what M06 shows |
 | A slow terminal drops frames | agent | effects are time-based; frames are area-limited |
 
-Status: slices 1 to 3 have passed their checks and hosted CI. Slices 4 to 7 are
-planned; none of their checks has run.
+Status: slices 1 to 7 have passed their checks and hosted CI; S9 is in review.

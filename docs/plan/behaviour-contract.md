@@ -14,20 +14,20 @@ a monotonic clock instant.
 | ID | Given | Then | Evidence |
 | --- | --- | --- | --- |
 | C01 | no arguments | work 25 min, short break 5 min, long break 15 min, a long break after every 4th work phase | `defaults_are_classic_pomodoro` |
-| C02 | `--work 1`, `--work 99`, `--short 1`, `--long 99`, `--every 1`, `--every 99`, `--work 025` | accepted as 1, 99, 1, 99, 1, 99 and 25 | `accepts_bounds_and_leading_zeros` |
-| C03 | `--work 0`, `--short 100`, `--long abc`, `--every -1`, `--work ""`, `--work " 5"` | one line on stderr naming the flag, the rejected value and the range 1 to 99; exit 2; stdout empty | `rejects_out_of_range_or_non_numeric` |
-| C04 | a flag as the last argument, such as `--work` | one line on stderr naming the flag and saying its value is missing; exit 2; stdout empty | `rejects_missing_value` |
-| C05 | `--wrok 5`, `--work=5`, or a bare `5` | one line on stderr naming the unrecognised argument; exit 2; stdout empty | `rejects_unknown_argument` |
-| C06 | `--work 10 --work 20` | one line on stderr naming the repeated flag; exit 2; stdout empty | `rejects_repeated_flag` |
-| C07 | an argument that is not valid Unicode, on Linux and on Windows | one line on stderr; exit 2; no panic | `rejects_non_unicode_argument` |
-| C08 | `-h` or `--help` anywhere among the arguments, including beside invalid ones | usage on stdout listing every flag with its values and default, and the keys; stderr empty; exit 0; works without a terminal | `help_prints_usage` |
+| C02 | `--work 1`, `--work 99`, `--short 1`, `--long 99`, `--every 1`, `--every 99`, `--work 025`, `--work=50` | accepted as 1, 99, 1, 99, 1, 99, 25 and 50 | `accepts_bounds_and_leading_zeros` |
+| C03 | `--work 0`, `--short 100`, `--long abc`, `--every -1`, `--work ""`, `--work " 5"` | clap's error on stderr naming the flag and the rejected value, with the range 1 to 99 from the value's own check; exit 2; stdout empty | `rejects_out_of_range_or_non_numeric` |
+| C04 | a flag as the last argument, such as `--work` | clap's error on stderr naming the flag and saying a value is required; exit 2; stdout empty | `rejects_missing_value` |
+| C05 | `--wrok 5`, or a bare `5` | clap's error on stderr naming the unexpected argument, and `--work` as the near miss for `--wrok`; exit 2; stdout empty | `rejects_unknown_argument` |
+| C06 | `--work 10 --work 20` | clap's error on stderr saying `--work` cannot be used more than once; exit 2; stdout empty | `rejects_repeated_flag` |
+| C07 | an argument that is not valid Unicode, on Linux and on Windows | clap's error on stderr; exit 2; no panic | `rejects_non_unicode_argument` |
+| C08 | `-h` or `--help`, with valid arguments or before any invalid one | clap's help on stdout: every flag with its range or values and its default, then the keys; stderr empty; exit 0; works without a terminal | `help_prints_usage` |
 | C09 | valid arguments, stdout not a terminal | one line on stderr saying an interactive terminal is required; exit 1; stdout empty, so no escape sequence was written | `refuses_non_terminal_stdout` |
 | C10 | invalid arguments, stdout not a terminal | the argument error is reported; exit 2 | `argument_errors_precede_terminal_check` |
-| C11 | `--work 0 --wrok 5`, two wrong arguments | only the first in argument order, `--work 0`, is reported | `reports_first_wrong_argument` |
+| C11 | `--work 0 --wrok 5`, two wrong arguments | one error is reported and nothing runs; exit 2 | `stops_at_one_argument_error` |
 | C12 | `--color` with `auto`, `truecolor`, `256`, `16` or `none` | accepted; without the flag, `auto` | `accepts_appearance_choices` |
 | C13 | `--glyphs` with `auto`, `emoji`, `symbols` or `ascii` | accepted; without the flag, `auto` | `accepts_appearance_choices` |
 | C14 | `--motion` with `on` or `off` | accepted; without the flag, `on` | `accepts_appearance_choices` |
-| C15 | `--color 8`, `--glyphs fancy`, `--motion maybe` | one line on stderr naming the flag, the rejected value and the accepted values; exit 2; stdout empty | `rejects_unknown_choice` |
+| C15 | `--color 8`, `--glyphs fancy`, `--motion maybe` | clap's error on stderr naming the flag, the rejected value and the possible values; exit 2; stdout empty | `rejects_unknown_choice` |
 
 ## Timer
 

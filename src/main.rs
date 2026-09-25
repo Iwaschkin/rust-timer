@@ -12,10 +12,8 @@ mod theme;
 mod timer;
 mod view;
 
-use cli::Invocation;
 use environment::Environment;
 use std::error::Error;
-use std::io::{self, Write};
 use std::process::ExitCode;
 
 /// The exit status for arguments that were rejected before anything ran.
@@ -34,21 +32,19 @@ fn report(error: &dyn Error) -> String {
 }
 
 fn main() -> ExitCode {
-    let options = match cli::parse(std::env::args_os().skip(1)) {
-        Ok(Invocation::Run(options)) => options,
-        Ok(Invocation::Help) => {
-            let usage = cli::usage(&terminal::key_help());
-            return match io::stdout().lock().write_all(usage.as_bytes()) {
-                Ok(()) => ExitCode::SUCCESS,
+    let options = match cli::parse(std::env::args_os(), &terminal::key_help()) {
+        Ok(options) => options,
+        // Help and argument errors both stop here: clap prints help to stdout and an
+        // error to stderr, in colour where that is a terminal.
+        Err(stop) => {
+            return match stop.print() {
                 Err(error) => {
                     eprintln!("pomodoro: could not print the usage: {}", report(&error));
                     ExitCode::FAILURE
                 }
+                Ok(()) if stop.use_stderr() => ExitCode::from(USAGE),
+                Ok(()) => ExitCode::SUCCESS,
             };
-        }
-        Err(error) => {
-            eprintln!("pomodoro: {}", report(&error));
-            return ExitCode::from(USAGE);
         }
     };
     let environment = Environment::from_lookup(
