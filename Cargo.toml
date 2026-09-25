@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+tui-big-text = "0.8.10"
 
 # The baseline's native lints; the project's guard checks them.
 [lints.rust]

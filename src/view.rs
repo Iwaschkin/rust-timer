@@ -1,22 +1,56 @@
-//! Draws the timer: a header with the rounds, the phase panel with its time and
-//! bar, and the keys.
+//! Draws the timer: a header with the rounds, the phase panel, the keys, and the
+//! Ready popup over everything when a phase waits.
+//!
+//! The panel has three layouts by window size. Large shows the braille dial beside
+//! 8-cell block digits; medium shows 4-cell digits; compact shows the time as text.
+//! Every layout has the gradient bar, and the larger two the cycle ribbon.
 //!
 //! Everything is drawn in the palette's 24-bit colours; the frame is fitted to the
 //! terminal's colour tier afterwards.
+
+mod bar;
+mod clock;
+mod dial;
+mod popup;
+mod ribbon;
 
 use crate::glyphs::{Glyph, GlyphTier};
 use crate::options::Appearance;
 use crate::theme;
 use crate::timer::{Phase, State, Timer};
+use clock::Size;
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Gauge, Padding, Paragraph};
+use ratatui::widgets::{Block, BorderType, Padding, Paragraph};
 use std::time::{Duration, Instant};
 
 /// More rounds than this are counted in words only.
 const MOST_ROUND_GLYPHS: u8 = 8;
+
+/// The panel's layout, chosen by window size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Tier {
+    /// At least 80 × 24: dial and large digits.
+    Large,
+    /// At least 48 × 16: medium digits.
+    Medium,
+    /// Anything smaller: the time as text.
+    Compact,
+}
+
+impl Tier {
+    fn of(area: Rect) -> Self {
+        if area.width >= 80 && area.height >= 24 {
+            Self::Large
+        } else if area.width >= 48 && area.height >= 16 {
+            Self::Medium
+        } else {
+            Self::Compact
+        }
+    }
+}
 
 /// Draws `timer` as it stands at `now`, with `keys` on the last line.
 pub(crate) fn render(
@@ -35,9 +69,14 @@ pub(crate) fn render(
         Constraint::Length(1),
     ])
     .areas(area);
+    let tier = Tier::of(area);
     frame.render_widget(header_line(timer, appearance.glyphs), header);
-    render_panel(frame, panel, timer, now, appearance.glyphs);
+    render_panel(frame, panel, timer, now, appearance.glyphs, tier);
     frame.render_widget(key_caps(keys), footer);
+    if timer.state() == State::Ready {
+        theme::veil(frame.buffer_mut());
+        popup::render(frame, area, timer, appearance.glyphs, tier != Tier::Compact);
+    }
 }
 
 fn header_line(timer: &Timer, glyphs: GlyphTier) -> Paragraph<'static> {
@@ -72,9 +111,17 @@ fn header_line(timer: &Timer, glyphs: GlyphTier) -> Paragraph<'static> {
     Paragraph::new(Line::from(spans))
 }
 
-fn render_panel(frame: &mut Frame<'_>, area: Rect, timer: &Timer, now: Instant, glyphs: GlyphTier) {
+fn render_panel(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    timer: &Timer,
+    now: Instant,
+    glyphs: GlyphTier,
+    tier: Tier,
+) {
     let phase = timer.phase();
     let accent = theme::accent(phase);
+    let state = timer.state();
     let title = Span::styled(
         format!(
             " {} {} ",
@@ -83,7 +130,6 @@ fn render_panel(frame: &mut Frame<'_>, area: Rect, timer: &Timer, now: Instant, 
         ),
         Style::new().fg(accent).add_modifier(Modifier::BOLD),
     );
-    let state = timer.state();
     let status = Span::styled(
         format!(
             " {} {} ",
@@ -103,24 +149,97 @@ fn render_panel(frame: &mut Frame<'_>, area: Rect, timer: &Timer, now: Instant, 
         .padding(Padding::horizontal(2));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let [_, time, _, bar, _] = Layout::vertical([
+    let clock_color = if state == State::Paused {
+        theme::faded(accent)
+    } else {
+        accent
+    };
+    let time = remaining_label(timer.remaining(now));
+    let hero_height = match tier {
+        Tier::Large => 10,
+        Tier::Medium => Size::Medium.cells().1,
+        Tier::Compact => 1,
+    };
+    let [_, badge, _, hero, _, bar, label, _, ribbon, _] = Layout::vertical([
         Constraint::Fill(1),
+        Constraint::Length(u16::from(tier != Tier::Compact)),
+        Constraint::Length(u16::from(tier != Tier::Compact)),
+        Constraint::Length(hero_height),
+        Constraint::Length(u16::from(tier != Tier::Compact)),
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Length(u16::from(tier != Tier::Compact)),
+        Constraint::Length(u16::from(tier != Tier::Compact)),
         Constraint::Fill(1),
     ])
     .areas(inner);
-    let clock = Paragraph::new(remaining_label(timer.remaining(now)))
-        .style(Style::new().fg(accent).add_modifier(Modifier::BOLD))
-        .centered();
-    frame.render_widget(clock, time);
-    let gauge = Gauge::default()
-        .gauge_style(Style::new().fg(accent).bg(theme::TRACK))
-        .use_unicode(true)
-        .ratio(timer.progress(now).ratio())
-        .label(format!("{:.0}%", timer.progress(now).ratio() * 100.0));
-    frame.render_widget(gauge, bar);
+    if state == State::Paused {
+        let paused = Span::styled(
+            format!(" {} PAUSED ", glyphs.glyph(Glyph::Paused)),
+            Style::new()
+                .bg(theme::DIM)
+                .fg(theme::BACKGROUND)
+                .add_modifier(Modifier::BOLD),
+        );
+        frame.render_widget(Paragraph::new(Line::from(paused)).centered(), badge);
+    }
+    match tier {
+        Tier::Large => {
+            let [dial_area, _, digits] = Layout::horizontal([
+                Constraint::Length(24),
+                Constraint::Length(4),
+                Constraint::Length(Size::Large.cells().0 * 5),
+            ])
+            .flex(Flex::Center)
+            .areas(hero);
+            let glyph = glyphs.glyph(phase_glyph(phase));
+            dial::render(frame, dial_area, timer.progress(now), accent, glyph);
+            let [_, digits, _] = Layout::vertical([
+                Constraint::Fill(1),
+                Constraint::Length(Size::Large.cells().1),
+                Constraint::Fill(1),
+            ])
+            .areas(digits);
+            clock::render(frame, digits, &time, clock_color, Size::Large);
+        }
+        Tier::Medium => clock::render(frame, hero, &time, clock_color, Size::Medium),
+        Tier::Compact => {
+            let clock = Paragraph::new(time)
+                .style(Style::new().fg(clock_color).add_modifier(Modifier::BOLD))
+                .centered();
+            frame.render_widget(clock, hero);
+        }
+    }
+    let progress = timer.progress(now);
+    bar::render(frame.buffer_mut(), bar, progress, accent);
+    frame.render_widget(bar_label(timer, now), label);
+    let segments = timer.cycle();
+    if !ribbon::render(
+        frame.buffer_mut(),
+        ribbon,
+        &segments,
+        timer.position(),
+        progress,
+    ) {
+        let words = format!("Round {} of {}", timer.round(), timer.rounds());
+        frame.render_widget(
+            Paragraph::new(words)
+                .style(Style::new().fg(theme::DIM))
+                .centered(),
+            ribbon,
+        );
+    }
+}
+
+/// The line under the bar: elapsed time out of the phase length.
+fn bar_label(timer: &Timer, now: Instant) -> Paragraph<'static> {
+    let elapsed = remaining_label(timer.progress(now).elapsed());
+    let total = remaining_label(timer.length());
+    Paragraph::new(Line::from(vec![Span::styled(
+        format!("{elapsed} of {total}"),
+        Style::new().fg(theme::DIM),
+    )]))
+    .centered()
 }
 
 fn key_caps(keys: &[(&str, &str)]) -> Paragraph<'static> {
@@ -129,12 +248,12 @@ fn key_caps(keys: &[(&str, &str)]) -> Paragraph<'static> {
         spans.push(Span::styled(
             format!(" {key} "),
             Style::new()
-                .bg(theme::SURFACE)
+                .bg(theme::TRACK)
                 .fg(theme::TEXT)
                 .add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled(
-            format!(" {action}   "),
+            format!(" {action}  "),
             Style::new().fg(theme::DIM),
         ));
     }

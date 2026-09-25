@@ -84,8 +84,8 @@ impl Timer {
         self.settings.every.get()
     }
 
-    fn length(&self) -> Duration {
-        match self.phase {
+    fn length_of(&self, phase: Phase) -> Duration {
+        match phase {
             Phase::Work => self.settings.work.duration(),
             Phase::ShortBreak => self.settings.short_break.duration(),
             Phase::LongBreak => self.settings.long_break.duration(),
@@ -155,29 +155,94 @@ impl Timer {
 
     /// Loads the phase that follows the current one, ready at full length.
     fn advance(&mut self) {
-        (self.phase, self.round) = match self.phase {
-            Phase::Work if self.round >= self.rounds() => (Phase::LongBreak, self.round),
-            Phase::Work => (Phase::ShortBreak, self.round),
-            Phase::ShortBreak => (Phase::Work, self.round.saturating_add(1)),
-            Phase::LongBreak => (Phase::Work, 1),
-        };
+        (self.phase, self.round) = following(self.phase, self.round, self.rounds());
         self.clock = Clock::Ready;
+    }
+
+    /// Every phase of the cycle, in order, with its length.
+    pub(crate) fn cycle(&self) -> Vec<Segment> {
+        let mut at = (Phase::Work, 1);
+        let mut segments = Vec::new();
+        loop {
+            segments.push(Segment {
+                phase: at.0,
+                length: self.length_of(at.0),
+            });
+            if at.0 == Phase::LongBreak {
+                return segments;
+            }
+            at = following(at.0, at.1, self.rounds());
+        }
+    }
+
+    /// Where the current phase sits in [`Timer::cycle`].
+    pub(crate) fn position(&self) -> usize {
+        let before = usize::from(self.round.saturating_sub(1)) * 2;
+        match self.phase {
+            Phase::Work => before,
+            Phase::ShortBreak | Phase::LongBreak => before + 1,
+        }
+    }
+
+    /// The length of the current phase.
+    pub(crate) fn length(&self) -> Duration {
+        self.length_of(self.phase)
     }
 }
 
-/// The filled share of the progress bar.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Progress(f64);
+/// The phase, and its round, that follows `phase` in round `round` of a cycle of
+/// `rounds` work phases. The one statement of the cycle rule.
+fn following(phase: Phase, round: u8, rounds: u8) -> (Phase, u8) {
+    match phase {
+        Phase::Work if round >= rounds => (Phase::LongBreak, round),
+        Phase::Work => (Phase::ShortBreak, round),
+        Phase::ShortBreak => (Phase::Work, round.saturating_add(1)),
+        Phase::LongBreak => (Phase::Work, 1),
+    }
+}
+
+/// One phase of the cycle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Segment {
+    /// Which phase.
+    pub(crate) phase: Phase,
+    /// How long it lasts.
+    pub(crate) length: Duration,
+}
+
+/// How much of a phase has passed: elapsed time out of the phase length, never
+/// more than the length.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Progress {
+    elapsed: Duration,
+    length: Duration,
+}
 
 impl Progress {
     /// `length` is never zero: a phase lasts at least a minute.
     fn new(elapsed: Duration, length: Duration) -> Self {
-        Self(elapsed.min(length).div_duration_f64(length))
+        Self {
+            elapsed: elapsed.min(length),
+            length,
+        }
     }
 
     /// The share as a ratio from 0 to 1.
     pub(crate) fn ratio(self) -> f64 {
-        self.0
+        self.elapsed.div_duration_f64(self.length)
+    }
+
+    /// The share of `units`, rounded down, in exact integer arithmetic: the number
+    /// of eighth-cells to fill, for example.
+    pub(crate) fn scaled(self, units: u32) -> u32 {
+        let share = self.elapsed.as_nanos().saturating_mul(u128::from(units))
+            / self.length.as_nanos().max(1);
+        u32::try_from(share).unwrap_or(units)
+    }
+
+    /// Time passed in the phase.
+    pub(crate) fn elapsed(self) -> Duration {
+        self.elapsed
     }
 }
 

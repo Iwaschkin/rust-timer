@@ -105,6 +105,8 @@ fn palette_meets_contrast_targets() {
     let pairs = [
         (TEXT, BACKGROUND, text),
         (TEXT, SURFACE, text),
+        (TEXT, TRACK, text),
+        (BACKGROUND, DIM, text),
         (DIM, BACKGROUND, text),
         (DIM, SURFACE, text),
         (WORK, SURFACE, text),

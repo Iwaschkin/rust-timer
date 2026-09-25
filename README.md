@@ -4,12 +4,30 @@ A pomodoro timer for the terminal. It runs a cycle of work phases and breaks, an
 shows the current phase as a progress bar with the time left.
 
 ```text
-Work · Running
-Round 2 of 4
-┌──────────────────────────────────────────────────────┐
-│████████████████        17:42                         │
-└──────────────────────────────────────────────────────┘
-space start/pause · s skip · q quit
+ 🍅 pomodoro   🍅⚪⚪⚪ Round 2 of 4
+┏ 🍅 Work ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ⏳ Running ┓
+┃                                                                              ┃
+┃                                                                              ┃
+┃                                                                              ┃
+┃                                                                              ┃
+┃            ⣀⣤⣴⣶⣶⣶⣶⣦⣤⣀                                                        ┃
+┃         ⢀⣴⣾⠿⠋⠉    ⠉⠙⠿⣷⣦⡀          ██    ██████             ███   ████        ┃
+┃        ⢠⣾⡟⠁          ⠈⢻⣷⡄        ███    ██  ██    ██      ████  ██  ██       ┃
+┃       ⢀⣿⡏     🍅       ⢹⣿⡀        ██        ██    ██     ██ ██      ██       ┃
+┃       ⢸⣿      29%       ⣿⡇        ██       ██           ██  ██    ███        ┃
+┃       ⢸⣿                ⣿⡇        ██      ██            ███████  ██          ┃
+┃       ⠈⣿⣇              ⣸⠉⠁        ██      ██      ██        ██  ██  ██       ┃
+┃        ⠘⢿⣧⡀          ⢀⣼⡿⠃       ██████    ██      ██       ████ ██████       ┃
+┃         ⠈⠻⢿⣶⣄⣀    ⣀⣠⣶⡿⠟⠁                                                     ┃
+┃            ⠉⠛⠻⠿⠿⠿⠿⠟⠛⠉                                                        ┃
+┃                                                                              ┃
+┃  █████████████████████▌                                                      ┃
+┃                                07:18 of 25:00                                ┃
+┃                                                                              ┃
+┃  ████████████ ███ ███▊                                                       ┃
+┃                                                                              ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+                     space  start/pause   s  skip   q  quit
 ```
 
 ## How it works
@@ -19,11 +37,12 @@ space start/pause · s skip · q quit
   With the defaults that's 25 minutes of work, 5-minute short breaks and a 15-minute
   long break.
 - **The first phase** starts running as soon as the program opens.
-- **When a phase ends,** the terminal bell rings once. The next phase is loaded at
-  full length and waits, marked Ready, until you press space. Nothing moves on
-  while you are away.
-- **The bar** fills as the phase runs. The label on it is the time left as
-  minutes and seconds, rounded up, so it reads `00:00` only when the phase is over.
+- **When a phase ends,** the terminal bell rings once and a popup names the next
+  phase over the dimmed screen. That phase is loaded at full length and waits until
+  you press space. Nothing moves on while you are away.
+- **The time left** is shown in large block digits as minutes and seconds, rounded
+  up, so it reads `00:00` only when the phase is over. A dial of braille dots and a
+  bar that fills in eighths of a cell show how much of the phase has passed.
 - **Timing** comes from the system's monotonic clock, not from counting screen
   updates. The screen redraws at least four times a second, and a slow redraw
   never changes the length of a phase.
@@ -32,8 +51,9 @@ space start/pause · s skip · q quit
 
 - Windows or Linux. macOS is not tested.
 - An interactive terminal: Windows Terminal on Windows, or any terminal emulator
-  on Linux. At 40 columns by 6 rows or more, the whole screen fits; a smaller
-  window still works, with parts cut off.
+  on Linux. The full layout, with the dial, needs 80 columns by 24 rows; from 48 by
+  16 the digits get smaller and the dial goes; below that the time is plain text. A
+  tiny window still works, with parts cut off.
 - To build it: [rustup](https://rustup.rs). The repository pins Rust 1.98.1 in
   `rust-toolchain.toml`, and rustup installs that version the first time you run
   `cargo` here.
@@ -101,9 +121,17 @@ Keys work with or without Shift. Any other key does nothing.
 
 ### The screen
 
-From the top: the phase and its state (`Work`, `Short break` or `Long break`;
-`Running`, `Paused` or `Ready`), the round (a break shows the round it follows),
-the progress bar with the time left, and the keys.
+- **The header** shows a tomato for each work phase done in this cycle, a circle
+  for each still to come, and the round (a break shows the round it follows).
+- **The panel** is framed in the phase's colour: tomato red with a thick border for
+  work, mint with a rounded border for a short break, lavender with a double border
+  for a long break. Its title gives the phase and its state (`Running`, `Paused` or
+  `Ready`).
+- **Inside**, from the top: a Paused badge when paused, the dial and the large
+  digits (dimmed while paused), the bar with the time passed out of the phase
+  length, and the ribbon: one segment per phase of the cycle, as wide as the phase
+  is long, filled as the cycle goes on.
+- **The keys** are along the bottom.
 
 Quitting ends the run. Nothing is saved, and the next run starts again at round 1.
 

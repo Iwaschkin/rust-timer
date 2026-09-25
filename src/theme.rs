@@ -31,6 +31,36 @@ pub(crate) const LONG_BREAK: Color = Color::from_u32(0x00B6_9CFF);
 pub(crate) const ALERT: Color = Color::from_u32(0x00FF_C94D);
 /// Done: green.
 pub(crate) const SUCCESS: Color = Color::from_u32(0x007B_D88F);
+/// Drop shadows, and what the screen fades towards behind a popup.
+pub(crate) const SHADOW: Color = Color::from_u32(0x0007_080C);
+
+/// `from` moved towards `to` by `weight` out of 255. A colour that is not RGB
+/// yields `to`.
+pub(crate) fn mix(from: Color, to: Color, weight: u8) -> Color {
+    let (Color::Rgb(r1, g1, b1), Color::Rgb(r2, g2, b2)) = (from, to) else {
+        return to;
+    };
+    let blend = |start: u8, end: u8| {
+        let total = u16::from(start) * u16::from(255 - weight) + u16::from(end) * u16::from(weight);
+        // At most 255 × 255 / 255, so it always fits.
+        u8::try_from(total / 255).unwrap_or(u8::MAX)
+    };
+    Color::Rgb(blend(r1, r2), blend(g1, g2), blend(b1, b2))
+}
+
+/// A phase colour faded halfway to the background: a paused clock, or the dark
+/// end of a phase's gradient.
+pub(crate) fn faded(color: Color) -> Color {
+    mix(color, BACKGROUND, 140)
+}
+
+/// Dims every cell of `buffer` towards the shadow colour, behind a popup.
+pub(crate) fn veil(buffer: &mut Buffer) {
+    for cell in &mut buffer.content {
+        cell.fg = mix(cell.fg, SHADOW, 150);
+        cell.bg = mix(cell.bg, SHADOW, 150);
+    }
+}
 
 /// The colour of `phase`.
 pub(crate) fn accent(phase: Phase) -> Color {
@@ -100,7 +130,7 @@ fn fit(color: Color, depth: ColorDepth) -> Color {
 /// The palette's own 256-colour and 16-colour choices, which keep its contrast
 /// (research 6.5 and 6.6). Other colours, from gradients and effects, take the
 /// nearest match.
-const PALETTE: [(Color, u8, Color); 11] = [
+const PALETTE: [(Color, u8, Color); 12] = [
     (BACKGROUND, 233, Color::Black),
     (SURFACE, 234, Color::Black),
     (TRACK, 235, Color::Black),
@@ -112,6 +142,7 @@ const PALETTE: [(Color, u8, Color); 11] = [
     (LONG_BREAK, 147, Color::LightBlue),
     (ALERT, 221, Color::LightYellow),
     (SUCCESS, 114, Color::LightGreen),
+    (SHADOW, 232, Color::Black),
 ];
 
 fn to_256(color: Color) -> Color {
