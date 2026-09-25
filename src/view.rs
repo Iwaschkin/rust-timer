@@ -192,8 +192,13 @@ fn render_panel(
             ])
             .flex(Flex::Center)
             .areas(hero);
-            let glyph = glyphs.glyph(phase_glyph(phase));
-            dial::render(frame, dial_area, timer.progress(now), accent, glyph);
+            dial::render(
+                frame,
+                dial_area,
+                timer.progress(now),
+                accent,
+                phase_label(phase),
+            );
             let [_, digits, _] = Layout::vertical([
                 Constraint::Fill(1),
                 Constraint::Length(Size::Large.cells().1),

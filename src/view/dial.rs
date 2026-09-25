@@ -1,5 +1,5 @@
 //! The dial: a ring of braille dots that lights up clockwise from twelve o'clock
-//! as the phase runs, with the percentage in the middle.
+//! as the phase runs, with the percentage and the phase name in the middle.
 //!
 //! A braille cell holds 2 × 4 dots and a terminal cell is about twice as tall as it
 //! is wide, so each dot is square. The canvas is sized in dots so the ring is round.
@@ -20,13 +20,14 @@ const SAMPLES: u16 = 1440;
 /// Positions of braille dots, in dots from the canvas's lower left.
 type Dots = Vec<(f64, f64)>;
 
-/// Draws the dial for `progress` in `area`, with `glyph` above the percentage.
+/// Draws the dial for `progress` in `area`, with the phase `name` under the
+/// percentage.
 pub(super) fn render(
     frame: &mut Frame<'_>,
     area: Rect,
     progress: Progress,
     accent: Color,
-    glyph: &str,
+    name: &str,
 ) {
     if area.width < 4 || area.height < 3 {
         return;
@@ -37,9 +38,11 @@ pub(super) fn render(
     let radius = (width / 2.0).min(height / 2.0) - 1.0;
     let lit = progress.ratio();
     let (track, arc) = ring(centre, radius, lit);
-    let label = format!("{}%", progress.scaled(100));
-    // Each character is two dots wide, so half the label is its length in dots.
-    let half_label = f64::from(u16::try_from(label.len()).unwrap_or(0));
+    let percent = format!("{}%", progress.scaled(100));
+    let name = name.to_owned();
+    // Each character is two dots wide, so half a label is its length in dots.
+    let half = |text: &str| f64::from(u16::try_from(text.chars().count()).unwrap_or(0));
+    let (half_percent, half_name) = (half(&percent), half(&name));
     let canvas = Canvas::default()
         .marker(Marker::Braille)
         .background_color(theme::SURFACE)
@@ -56,17 +59,17 @@ pub(super) fn render(
                 color: accent,
             });
             context.print(
-                centre.0 - 2.0,
-                centre.1 + 3.0,
-                Line::from(Span::raw(glyph.to_owned())),
-            );
-            context.print(
-                centre.0 - half_label,
-                centre.1 - 2.0,
+                centre.0 - half_percent,
+                centre.1 + 2.0,
                 Line::from(Span::styled(
-                    label.clone(),
+                    percent.clone(),
                     Style::new().fg(accent).add_modifier(Modifier::BOLD),
                 )),
+            );
+            context.print(
+                centre.0 - half_name,
+                centre.1 - 3.0,
+                Line::from(Span::styled(name.clone(), Style::new().fg(theme::DIM))),
             );
         });
     frame.render_widget(canvas, area);
