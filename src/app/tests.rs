@@ -1,12 +1,147 @@
-use super::{PROGRESS_REFRESH, Signals, taskbar};
+use super::{PROGRESS_REFRESH, Signals, run_loop, taskbar};
 use crate::glyphs::GlyphTier;
+use crate::motion::Motion;
+use crate::options::Appearance;
 use crate::settings::Settings;
-use crate::terminal::{Taskbar, progress_sequence};
+use crate::terminal::{Command, Host, Taskbar, TerminalError, progress_sequence};
+use crate::theme::ColorDepth;
 use crate::timer::Timer;
 use crate::view::window_title;
+use ratatui::backend::TestBackend;
+use ratatui::{Frame, Terminal};
+use std::collections::VecDeque;
+use std::error::Error;
 use std::time::{Duration, Instant};
 
 const WORK: Duration = Duration::from_secs(25 * 60);
+
+/// A host whose clock moves only while the loop waits for a key, and whose keys
+/// arrive at set times after the start: the live session with the user and time
+/// scripted. Once the script is spent the user quits, so every run ends.
+struct Scripted {
+    start: Instant,
+    now: Instant,
+    keys: VecDeque<(Duration, Command)>,
+    terminal: Terminal<TestBackend>,
+    bells: Vec<Duration>,
+    titles: Vec<String>,
+    taskbars: Vec<Taskbar>,
+}
+
+impl Scripted {
+    fn new(keys: &[(Duration, Command)]) -> Result<Self, Box<dyn Error>> {
+        let start = Instant::now();
+        Ok(Self {
+            start,
+            now: start,
+            keys: keys.iter().copied().collect(),
+            terminal: Terminal::new(TestBackend::new(20, 6))?,
+            bells: Vec::new(),
+            titles: Vec::new(),
+            taskbars: Vec::new(),
+        })
+    }
+
+    fn since_start(&self) -> Duration {
+        self.now.saturating_duration_since(self.start)
+    }
+}
+
+impl Host for Scripted {
+    fn now(&self) -> Instant {
+        self.now
+    }
+
+    fn next_command(&mut self, timeout: Duration) -> Result<Option<Command>, TerminalError> {
+        let Some(&(at, command)) = self.keys.front() else {
+            return Ok(Some(Command::Quit));
+        };
+        let pressed = self.start + at;
+        if pressed <= self.now + timeout {
+            self.now = self.now.max(pressed);
+            self.keys.pop_front();
+            Ok(Some(command))
+        } else {
+            self.now += timeout;
+            Ok(None)
+        }
+    }
+
+    fn draw(&mut self, render: impl FnOnce(&mut Frame<'_>)) -> Result<(), TerminalError> {
+        match self.terminal.draw(render) {
+            Ok(_frame) => Ok(()),
+            Err(never) => match never {},
+        }
+    }
+
+    fn ring_bell(&mut self) -> Result<(), TerminalError> {
+        self.bells.push(self.since_start());
+        Ok(())
+    }
+
+    fn set_title(&mut self, title: &str) -> Result<(), TerminalError> {
+        self.titles.push(title.to_owned());
+        Ok(())
+    }
+
+    fn set_taskbar(&mut self, taskbar: Taskbar) -> Result<(), TerminalError> {
+        self.taskbars.push(taskbar);
+        Ok(())
+    }
+}
+
+/// A pause longer than the phase, driven through the whole loop: a one-minute work
+/// phase runs 20 s, is paused for 90, then runs the 40 it has left and ends with
+/// one bell, after which the short break waits (M09). The loop draws at least four
+/// frames a second, so the phase is short to keep the test quick.
+#[test]
+fn loop_rings_one_bell_at_phase_end() -> Result<(), Box<dyn Error>> {
+    let seconds = Duration::from_secs;
+    let mut host = Scripted::new(&[
+        (seconds(20), Command::StartPause),
+        (seconds(110), Command::StartPause),
+        (seconds(180), Command::Quit),
+    ])?;
+    let settings = Settings {
+        work: "1".parse()?,
+        ..Settings::default()
+    };
+    let appearance = Appearance {
+        depth: ColorDepth::TrueColor,
+        glyphs: GlyphTier::Emoji,
+    };
+    run_loop(&mut host, settings, appearance, Motion::Off)?;
+    assert_eq!(
+        host.bells,
+        [seconds(150)],
+        "one bell, as the work phase ends"
+    );
+    assert_eq!(
+        host.since_start(),
+        seconds(180),
+        "the script ran to its end"
+    );
+    let paused = "💤 00:40 Work paused — pomodoro";
+    assert!(host.titles.iter().any(|title| title == paused), "{paused}");
+    assert_eq!(
+        host.titles.last().map(String::as_str),
+        Some("🔔 Short break ready — pomodoro")
+    );
+    let states: Vec<&str> = host
+        .taskbars
+        .iter()
+        .map(|taskbar| match taskbar {
+            Taskbar::Running(_) => "running",
+            Taskbar::Paused(_) => "paused",
+            Taskbar::Waiting => "waiting",
+            Taskbar::Clear => "clear",
+        })
+        .collect();
+    let mut changes = states.clone();
+    changes.dedup();
+    assert_eq!(changes, ["running", "paused", "running", "waiting"]);
+    Ok(())
+}
 
 #[test]
 fn title_follows_timer() {
