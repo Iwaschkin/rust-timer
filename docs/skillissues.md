@@ -160,3 +160,26 @@ there is no hosted CI.
 - **Done:** the owner made the repository public, where standard runners are free.
   The run queued for `f05eaf3` then started and passed on every job (run
   36092083660, 108 s). Slice 3's review records both runs.
+
+### SI-12 A manual check that tests the terminal, not the program (misleads)
+
+- **Where:** rust-project-plan's acceptance rows, met at M03 after slice 3.
+- **What happened:** M03 said "a phase ends: the terminal bell rings once", checked
+  by hand. The owner heard nothing in VS Code's terminal or in Windows Terminal. The
+  row mixed two claims: that pomodoro sends a bell, which is the program's
+  behaviour, and that the terminal makes a sound, which is the terminal's
+  configuration. VS Code's `accessibility.signals.terminalBell` defaults to sound
+  `"auto"`, which plays only when a screen reader is attached. So a correct program
+  fails the row by default, and the manual check alone could not tell the two
+  apart. Neither skill offers a way to capture what a terminal program actually
+  writes. The same holds for M01 and M04.
+- **Expected:** plan-format.md to split such a row into what the program emits,
+  tested through a pseudo-terminal, and what the terminal does with it, a manual
+  check that records the terminal's settings. The baseline could name a
+  pseudo-terminal capture as the route to test terminal output.
+- **Done:** a throwaway harness ran pomodoro in a ConPTY, the pseudo-console both
+  terminals use, for 65 s with `--work 1`. It captured "Work · Running" becoming
+  "Short break · Ready" and exactly one standalone bell at that point; a PowerShell
+  control that writes a bell gave one standalone bell the same way. The README now
+  names the settings that make the bell audible. Windows Terminal defaults to an
+  audible bell, and why it was silent here is not established.

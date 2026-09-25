@@ -29,7 +29,7 @@
 ## Open limits (at most 3)
 
 - Windows CI skips release-mode tests and builds the release binary instead; only Linux ran them.
-- M03, the bell, is not run; `cargo run -- --work 1` reaches it in a minute.
+- M03: the owner heard no bell in VS Code's terminal or Windows Terminal. A ConPTY capture of `--work 1` shows one bell sent at the phase end; VS Code mutes it by default, Windows Terminal is unexplained.
 - M01 and M04 were validated by the owner on 2026-09-25; the terminal used is not recorded.
 
 Semantic review and hosted results are separate lines above; a passing command does not

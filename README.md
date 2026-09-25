@@ -125,9 +125,19 @@ the message is printed.
 - **`an interactive terminal is required; standard output is not one`**: the
   output is redirected to a file or a pipe. Run `pomodoro` directly in a terminal
   window. `--help` works either way.
-- **No bell**: many terminals mute the bell or show it as a flash or a taskbar
-  alert. Check the terminal's bell setting. The phase change still shows on screen
-  as `Ready`.
+- **No bell**: pomodoro sends the terminal's bell once when a phase ends; whether
+  you hear it is up to the terminal. The phase change still shows on screen as
+  `Ready`.
+  - VS Code's terminal is silent by default: its `accessibility.signals.terminalBell`
+    setting plays a sound only when a screen reader is attached. Set it to
+    `{ "sound": "on" }`, or turn on `terminal.integrated.enableVisualBell` for a
+    bell icon instead.
+  - Windows Terminal plays a sound by default (the profile's `bellStyle` is
+    `"audible"`). If it's silent, check that the profile doesn't change `bellStyle`
+    and that System sounds isn't muted in the Windows volume mixer. `"all"` also
+    flashes the taskbar.
+  - To test a terminal on its own, run `[Console]::Write([char]7)` in PowerShell,
+    or `printf '\a'` on Linux.
 - **The terminal stops echoing after pomodoro was killed**: quitting with `q`,
   Esc or Ctrl-C always restores the terminal, but a process killed from outside
   (for example with `kill` on Linux) cannot. Type `reset` and press Enter, even if
